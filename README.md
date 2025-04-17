@@ -1,5 +1,5 @@
 # PandaFactor - PandaAI量化因子库
-![预览](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/output.gif
+![预览](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/ezgif-8682a108e6e4ca.gif
 )
 
 ## PandaAI首届因子大赛已启动，你的Alpha值得被看见
