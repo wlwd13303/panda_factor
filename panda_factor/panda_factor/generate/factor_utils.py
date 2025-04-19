@@ -505,26 +505,85 @@ class FactorUtils:
 
     @staticmethod
     def VALUEWHEN(S: pd.Series, X: pd.Series) -> pd.Series:
-        """When condition S is True, take current value of X, otherwise use previous value"""
-        return pd.Series(np.where(S, X, np.nan)).ffill()
+        """When condition S is True, take current value of X
+        
+        Args:
+            S: Condition series (boolean)
+            X: Value series
+            
+        Returns:
+            pd.Series: When condition is True, take current value of X
+        """
+        # Ensure both series have the same index and are properly aligned
+        S, X = S.align(X)
+        
+        # Group by symbol and apply the logic
+        def apply_valuewhen(group):
+            s_group = S.loc[group.index]
+            x_group = X.loc[group.index]
+            # When condition is True, take the value from X
+            return pd.Series(np.where(s_group, x_group, np.nan), index=group.index)
+        
+        # Group by symbol and apply the function
+        result = X.groupby(level='symbol', group_keys=False).apply(apply_valuewhen)
+        
+        # Ensure the result has the correct index names
+        if not isinstance(result.index, pd.MultiIndex):
+            result.index = pd.MultiIndex.from_tuples(
+                [(d, s) for d, s in zip(result.index, result.index)],
+                names=['date', 'symbol']
+            )
+        elif result.index.names != ['date', 'symbol']:
+            result.index.names = ['date', 'symbol']
+            
+        return result
 
     #------------------   Level 2: Technical indicator functions (implemented using Level 0 and 1 functions) ------------------------------
     @staticmethod
-    def MACD(CLOSE: pd.Series, SHORT: int = 12, LONG: int = 26, M: int = 9) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate MACD indicator using EMA, requires 120 days for accuracy"""
+    def MACD(CLOSE: pd.Series, SHORT: int = 12, LONG: int = 26, M: int = 9) -> pd.Series:
+        """Calculate MACD indicator using EMA, requires 120 days for accuracy
+        
+        Args:
+            CLOSE: Close price series
+            SHORT: Short period EMA, default 12
+            LONG: Long period EMA, default 26
+            M: Signal line period, default 9
+            
+        Returns:
+            pd.Series: MACD line (DIF - DEA) * 2
+        """
         DIF = FactorUtils.EMA(CLOSE, SHORT) - FactorUtils.EMA(CLOSE, LONG)
         DEA = FactorUtils.EMA(DIF, M)
         MACD = (DIF - DEA) * 2
-        return FactorUtils.RD(DIF), FactorUtils.RD(DEA), FactorUtils.RD(MACD)
+        return FactorUtils.RD(MACD)
 
     @staticmethod
-    def KDJ(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 9, M1: int = 3, M2: int = 3) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate KDJ indicator"""
-        RSV = (CLOSE - FactorUtils.LLV(LOW, N)) / (FactorUtils.HHV(HIGH, N) - FactorUtils.LLV(LOW, N)) * 100
-        K = FactorUtils.EMA(RSV, (M1*2-1))
-        D = FactorUtils.EMA(K, (M2*2-1))
-        J = K*3 - D*2
-        return K, D, J
+    def KDJ(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 9, M1: int = 3, M2: int = 3) -> pd.Series:
+        """Calculate KDJ indicator, returns K line
+        
+        Args:
+            CLOSE: Close price series
+            HIGH: High price series
+            LOW: Low price series
+            N: RSV calculation period, default 9
+            M1: K line smoothing period, default 3
+            M2: D line smoothing period, default 3
+            
+        Returns:
+            pd.Series: K line value
+        """
+        # Calculate RSV in a vectorized way
+        llv = LOW.groupby(level='symbol').transform(lambda x: x.rolling(window=N, min_periods=1).min())
+        hhv = HIGH.groupby(level='symbol').transform(lambda x: x.rolling(window=N, min_periods=1).max())
+        
+        # Vectorized RSV calculation
+        rsv = (CLOSE - llv) / (hhv - llv) * 100
+        
+        # Vectorized EMA calculation
+        alpha = 2 / (M1 + 1)
+        K = rsv.groupby(level='symbol').transform(lambda x: x.ewm(alpha=alpha, min_periods=1, adjust=False).mean())
+        
+        return K
 
     @staticmethod
     def RSI(CLOSE: pd.Series, N: int = 24) -> pd.Series:
@@ -533,34 +592,28 @@ class FactorUtils:
         return FactorUtils.RD(FactorUtils.SMA(FactorUtils.MAX(DIF, 0), N) / FactorUtils.SMA(FactorUtils.ABS(DIF), N) * 100)
 
     @staticmethod
-    def WR(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 10, N1: int = 6) -> tuple[pd.Series, pd.Series]:
-        """Calculate Williams %R indicator"""
+    def WR(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 10, N1: int = 6) -> pd.Series:
+        """Calculate Williams %R indicator, returns WR line"""
         WR = (FactorUtils.HHV(HIGH, N) - CLOSE) / (FactorUtils.HHV(HIGH, N) - FactorUtils.LLV(LOW, N)) * 100
-        WR1 = (FactorUtils.HHV(HIGH, N1) - CLOSE) / (FactorUtils.HHV(HIGH, N1) - FactorUtils.LLV(LOW, N1)) * 100
-        return FactorUtils.RD(WR), FactorUtils.RD(WR1)
+        return FactorUtils.RD(WR)
 
     @staticmethod
-    def BIAS(CLOSE: pd.Series, L1: int = 6, L2: int = 12, L3: int = 24) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate BIAS indicator"""
+    def BIAS(CLOSE: pd.Series, L1: int = 6, L2: int = 12, L3: int = 24) -> pd.Series:
+        """Calculate BIAS indicator, returns BIAS1 line"""
         BIAS1 = (CLOSE - FactorUtils.MA(CLOSE, L1)) / FactorUtils.MA(CLOSE, L1) * 100
-        BIAS2 = (CLOSE - FactorUtils.MA(CLOSE, L2)) / FactorUtils.MA(CLOSE, L2) * 100
-        BIAS3 = (CLOSE - FactorUtils.MA(CLOSE, L3)) / FactorUtils.MA(CLOSE, L3) * 100
-        return FactorUtils.RD(BIAS1), FactorUtils.RD(BIAS2), FactorUtils.RD(BIAS3)
+        return FactorUtils.RD(BIAS1)
 
     @staticmethod
-    def BOLL(CLOSE: pd.Series, N: int = 20, P: int = 2) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate Bollinger Bands"""
+    def BOLL(CLOSE: pd.Series, N: int = 20, P: int = 2) -> pd.Series:
+        """Calculate Bollinger Bands, returns middle line"""
         MID = FactorUtils.MA(CLOSE, N)
-        UPPER = MID + FactorUtils.STD(CLOSE, N) * P
-        LOWER = MID - FactorUtils.STD(CLOSE, N) * P
-        return FactorUtils.RD(UPPER), FactorUtils.RD(MID), FactorUtils.RD(LOWER)
+        return FactorUtils.RD(MID)
 
     @staticmethod
-    def PSY(CLOSE: pd.Series, N: int = 12, M: int = 6) -> tuple[pd.Series, pd.Series]:
-        """Calculate PSY indicator"""
+    def PSY(CLOSE: pd.Series, N: int = 12, M: int = 6) -> pd.Series:
+        """Calculate PSY indicator, returns PSY line"""
         PSY = FactorUtils.COUNT(CLOSE > FactorUtils.REF(CLOSE, 1), N) / N * 100
-        PSYMA = FactorUtils.MA(PSY, M)
-        return FactorUtils.RD(PSY), FactorUtils.RD(PSYMA)
+        return FactorUtils.RD(PSY)
 
     @staticmethod
     def CCI(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 14) -> pd.Series:
@@ -580,8 +633,8 @@ class FactorUtils:
         return (FactorUtils.MA(CLOSE, M1) + FactorUtils.MA(CLOSE, M2) + FactorUtils.MA(CLOSE, M3) + FactorUtils.MA(CLOSE, M4)) / 4
 
     @staticmethod
-    def DMI(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 14, M2: int = 6) -> tuple[pd.Series, pd.Series, pd.Series, pd.Series]:
-        """Calculate DMI indicator: matches results from TongHuaShun and TDX"""
+    def DMI(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 14, M2: int = 6) -> pd.Series:
+        """Calculate DMI indicator, returns ADX line"""
         TR = FactorUtils.SUM(FactorUtils.MAX(FactorUtils.MAX(HIGH - LOW, FactorUtils.ABS(HIGH - FactorUtils.REF(CLOSE, 1))), FactorUtils.ABS(LOW - FactorUtils.REF(CLOSE, 1))), M1)
         HD = HIGH - FactorUtils.REF(HIGH, 1)
         LD = FactorUtils.REF(LOW, 1) - LOW
@@ -590,33 +643,26 @@ class FactorUtils:
         PDI = DMP * 100 / TR
         MDI = DMM * 100 / TR
         ADX = FactorUtils.MA(FactorUtils.ABS(MDI - PDI) / (PDI + MDI) * 100, M2)
-        ADXR = (ADX + FactorUtils.REF(ADX, M2)) / 2
-        return PDI, MDI, ADX, ADXR
+        return ADX
 
     @staticmethod
-    def TAQ(HIGH: pd.Series, LOW: pd.Series, N: int) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Calculate Tang Aikun (Turtle Trading) Channel indicator"""
+    def TAQ(HIGH: pd.Series, LOW: pd.Series, N: int) -> pd.Series:
+        """Calculate Tang Aikun Channel indicator, returns upper line"""
         UP = FactorUtils.HHV(HIGH, N)
-        DOWN = FactorUtils.LLV(LOW, N)
-        MID = (UP + DOWN) / 2
-        return UP, MID, DOWN
+        return UP
 
     @staticmethod
-    def KTN(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 20, M: int = 10) -> tuple[pd.Series, pd.Series, pd.Series]:
-        """Keltner Channel, N=20 days, ATR=10 days"""
+    def KTN(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, N: int = 20, M: int = 10) -> pd.Series:
+        """Calculate Keltner Channel, returns middle line"""
         MID = FactorUtils.EMA((HIGH + LOW + CLOSE) / 3, N)
-        ATRN = FactorUtils.ATR(CLOSE, HIGH, LOW, M)
-        UPPER = MID + 2 * ATRN
-        LOWER = MID - 2 * ATRN
-        return UPPER, MID, LOWER
+        return MID
 
     @staticmethod
-    def TRIX(CLOSE: pd.Series, M1: int = 12, M2: int = 20) -> tuple[pd.Series, pd.Series]:
-        """Triple Exponential Smoothing Moving Average"""
+    def TRIX(CLOSE: pd.Series, M1: int = 12, M2: int = 20) -> pd.Series:
+        """Calculate TRIX indicator, returns TRIX line"""
         TR = FactorUtils.EMA(FactorUtils.EMA(FactorUtils.EMA(CLOSE, M1), M1), M1)
         TRIX = (TR - FactorUtils.REF(TR, 1)) / FactorUtils.REF(TR, 1) * 100
-        TRMA = FactorUtils.MA(TRIX, M2)
-        return TRIX, TRMA
+        return TRIX
 
     @staticmethod
     def VR(CLOSE: pd.Series, VOL: pd.Series, M1: int = 26) -> pd.Series:
@@ -625,65 +671,69 @@ class FactorUtils:
         return FactorUtils.SUM(FactorUtils.IF(CLOSE > LC, VOL, 0), M1) / FactorUtils.SUM(FactorUtils.IF(CLOSE <= LC, VOL, 0), M1) * 100
 
     @staticmethod
-    def EMV(HIGH: pd.Series, LOW: pd.Series, VOL: pd.Series, N: int = 14, M: int = 9) -> tuple[pd.Series, pd.Series]:
-        """Ease of Movement Value"""
+    def EMV(HIGH: pd.Series, LOW: pd.Series, VOL: pd.Series, N: int = 14, M: int = 9) -> pd.Series:
+        """Calculate EMV indicator, returns EMV line"""
         VOLUME = FactorUtils.MA(VOL, N) / VOL
         MID = 100 * (HIGH + LOW - FactorUtils.REF(HIGH + LOW, 1)) / (HIGH + LOW)
         EMV = FactorUtils.MA(MID * VOLUME * (HIGH - LOW) / FactorUtils.MA(HIGH - LOW, N), N)
-        MAEMV = FactorUtils.MA(EMV, M)
-        return EMV, MAEMV
+        return EMV
 
     @staticmethod
-    def DPO(CLOSE: pd.Series, M1: int = 20, M2: int = 10, M3: int = 6) -> tuple[pd.Series, pd.Series]:
-        """Detrended Price Oscillator"""
+    def DPO(CLOSE: pd.Series, M1: int = 20, M2: int = 10, M3: int = 6) -> pd.Series:
+        """Calculate DPO indicator, returns DPO line"""
         DPO = CLOSE - FactorUtils.REF(FactorUtils.MA(CLOSE, M1), M2)
-        MADPO = FactorUtils.MA(DPO, M3)
-        return DPO, MADPO
+        return DPO
 
     @staticmethod
-    def BRAR(OPEN: pd.Series, CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 26) -> tuple[pd.Series, pd.Series]:
-        """BRAR-ARBR Sentiment Indicator"""
+    def BRAR(OPEN: pd.Series, CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 26) -> pd.Series:
+        """Calculate BRAR indicator, returns AR line"""
         AR = FactorUtils.SUM(HIGH - OPEN, M1) / FactorUtils.SUM(OPEN - LOW, M1) * 100
-        
-        # 使用 numpy.maximum 替代 MAX 函数
-        high_close_diff = HIGH - FactorUtils.REF(CLOSE, 1)
-        close_low_diff = FactorUtils.REF(CLOSE, 1) - LOW
-        BR = FactorUtils.SUM(pd.Series(np.maximum(high_close_diff, 0), index=high_close_diff.index), M1) / \
-             FactorUtils.SUM(pd.Series(np.maximum(close_low_diff, 0), index=close_low_diff.index), M1) * 100
-        return AR, BR
+        return AR
 
     @staticmethod
-    def DFMA(CLOSE: pd.Series, N1: int = 10, N2: int = 50, M: int = 10) -> tuple[pd.Series, pd.Series]:
-        """Difference of Moving Average"""
+    def DFMA(CLOSE: pd.Series, N1: int = 10, N2: int = 50, M: int = 10) -> pd.Series:
+        """Calculate DFMA indicator, returns DIF line"""
         DIF = FactorUtils.MA(CLOSE, N1) - FactorUtils.MA(CLOSE, N2)
-        DIFMA = FactorUtils.MA(DIF, M)
-        return DIF, DIFMA
+        return DIF
 
     @staticmethod
-    def MTM(CLOSE: pd.Series, N: int = 12, M: int = 6) -> tuple[pd.Series, pd.Series]:
-        """Momentum Index"""
+    def MTM(CLOSE: pd.Series, N: int = 12, M: int = 6) -> pd.Series:
+        """Calculate MTM indicator, returns MTM line"""
         MTM = CLOSE - FactorUtils.REF(CLOSE, N)
-        MTMMA = FactorUtils.MA(MTM, M)
-        return MTM, MTMMA
+        return MTM
 
     @staticmethod
-    def MASS(HIGH: pd.Series, LOW: pd.Series, N1: int = 9, N2: int = 25, M: int = 6) -> tuple[pd.Series, pd.Series]:
-        """Mass Index"""
+    def MASS(HIGH: pd.Series, LOW: pd.Series, N1: int = 9, N2: int = 25, M: int = 6) -> pd.Series:
+        """Calculate MASS indicator, returns MASS line"""
         MASS = FactorUtils.SUM(FactorUtils.MA(HIGH - LOW, N1) / FactorUtils.MA(FactorUtils.MA(HIGH - LOW, N1), N1), N2)
-        MA_MASS = FactorUtils.MA(MASS, M)
-        return MASS, MA_MASS
+        return MASS
 
     @staticmethod
-    def ROC(CLOSE: pd.Series, N: int = 12, M: int = 6) -> tuple[pd.Series, pd.Series]:
-        """Rate of Change"""
-        ROC = 100 * (CLOSE - FactorUtils.REF(CLOSE, N)) / FactorUtils.REF(CLOSE, N)
-        MAROC = FactorUtils.MA(ROC, M)
-        return ROC, MAROC
+    def ROC(CLOSE: pd.Series, N: int = 12) -> pd.Series:
+        """Calculate Rate of Change (ROC) indicator
+        
+        ROC = (Current Price - Price N periods ago) / Price N periods ago × 100
+        
+        Args:
+            CLOSE: Price series (typically closing prices)
+            N: Number of periods to look back, default 12
+            
+        Returns:
+            pd.Series: ROC values in percentage
+        """
+        # Calculate N-period price change rate
+        prev_price = CLOSE.groupby(level='symbol').shift(N)
+        roc = (CLOSE - prev_price) / prev_price * 100
+        
+        # Fill initial NaN values with 0
+        roc = roc.fillna(0)
+        
+        return roc
 
     @staticmethod
-    def EXPMA(CLOSE: pd.Series, N1: int = 12, N2: int = 50) -> tuple[pd.Series, pd.Series]:
-        """Exponential Moving Average"""
-        return FactorUtils.EMA(CLOSE, N1), FactorUtils.EMA(CLOSE, N2)
+    def EXPMA(CLOSE: pd.Series, N1: int = 12, N2: int = 50) -> pd.Series:
+        """Calculate EXPMA indicator, returns short-term EMA"""
+        return FactorUtils.EMA(CLOSE, N1)
 
     @staticmethod
     def OBV(CLOSE: pd.Series, VOL: pd.Series) -> pd.Series:
@@ -698,8 +748,8 @@ class FactorUtils:
         return 100 - (100 / (1 + V1))
 
     @staticmethod
-    def ASI(OPEN: pd.Series, CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 26, M2: int = 10) -> tuple[pd.Series, pd.Series]:
-        """Accumulation Swing Index"""
+    def ASI(OPEN: pd.Series, CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 26, M2: int = 10) -> pd.Series:
+        """Calculate ASI indicator, returns ASI line"""
         LC = FactorUtils.REF(CLOSE, 1)
         AA = FactorUtils.ABS(HIGH - LC)
         BB = FactorUtils.ABS(LOW - LC)
@@ -709,8 +759,7 @@ class FactorUtils:
         X = (CLOSE - LC + (CLOSE - OPEN)/2 + LC - FactorUtils.REF(OPEN, 1))
         SI = 16 * X / R * FactorUtils.MAX(AA, BB)
         ASI = FactorUtils.SUM(SI, M1)
-        ASIT = FactorUtils.MA(ASI, M2)
-        return ASI, ASIT
+        return ASI
 
     @staticmethod
     def TS_MEAN(series: pd.Series, window: int = 20) -> pd.Series:

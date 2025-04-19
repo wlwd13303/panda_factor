@@ -7,10 +7,9 @@ import ast
 from panda_factor.data.data_provider import PandaDataProvider
 import time
 from panda_common.logger_config import logger
-from .factor_wrapper import FactorDataWrapper, FactorSeries
 from datetime import datetime
-from .factor_utils import FactorUtils
-
+from panda_factor.generate.factor_utils import FactorUtils
+from panda_factor.generate.factor_wrapper import FactorDataWrapper, FactorSeries
 
 class MacroFactor:
     """Factor management class, responsible for factor creation and validation"""
@@ -859,7 +858,7 @@ warnings.filterwarnings('ignore')
                 
                 # Check if factors exist
                 available_factors = self.data_provider.get_available_factors()
-                missing = [f for f in required_factors if f not in available_factors]
+                missing = [f for f in required_factors if f.upper() not in available_factors]
                 if missing:
                     result['is_valid'] = False
                     result['missing_factors'].extend(missing)
