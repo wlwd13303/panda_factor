@@ -89,9 +89,38 @@ class MacroFactor:
 
     # Allowed module attributes
     ALLOWED_ATTRIBUTES = {
-        'np': {'mean', 'std', 'max', 'min', 'sum', 'abs', 'log', 'exp', 'sqrt',
-               'where', 'nan', 'isnan', 'nanmean', 'nansum', 'nanstd'},
-        'pd': {'Series', 'DataFrame', 'isna', 'notna', 'isnull', 'notnull'},
+        'np': {
+            # 基础数学运算
+            'mean', 'std', 'max', 'min', 'sum', 'abs', 'log', 'exp', 'sqrt',
+            'where', 'nan', 'isnan', 'nanmean', 'nansum', 'nanstd',
+            # 数组操作
+            'array', 'zeros', 'ones', 'full', 'arange', 'linspace',
+            'concatenate', 'stack', 'vstack', 'hstack', 'reshape',
+            # 统计函数
+            'median', 'percentile', 'quantile', 'var', 'cov', 'corrcoef',
+            'average', 'cumsum', 'cumprod', 'diff', 'gradient',
+            # 条件和比较
+            'all', 'any', 'greater', 'greater_equal', 'less', 'less_equal',
+            'equal', 'not_equal', 'logical_and', 'logical_or', 'logical_not',
+            # 数学函数
+            'sin', 'cos', 'tan', 'arcsin', 'arccos', 'arctan', 'sinh', 'cosh',
+            'tanh', 'power', 'sign', 'floor', 'ceil', 'round', 'clip',
+            # 其他
+            'inf', 'pi', 'e', 'newaxis'
+        },
+        'pd': {
+            # 基础类型
+            'Series', 'DataFrame', 'Index', 'MultiIndex',
+            # 数据检查
+            'isna', 'notna', 'isnull', 'notnull',
+            # 数据操作
+            'concat', 'merge', 'to_datetime', 'date_range', 'DateOffset',
+            'Timestamp', 'Timedelta', 'NaT',
+            # 分组操作
+            'Grouper', 'TimeGrouper',
+            # 其他
+            'NA', 'NaT', 'read_csv', 'read_excel', 'to_numeric'
+        }
     }
 
     # Explicitly disallowed modules for security
@@ -100,6 +129,20 @@ class MacroFactor:
         'locals', 'getattr', 'setattr', 'delattr', '__import__', 'open',
         'compile', 'file', 'execfile', 'shutil', 'pickle', 'shelve',
         'marshal', 'importlib', 'pty', 'platform', 'popen', 'commands'
+    }
+
+    # Allowed modules for import
+    ALLOWED_IMPORTS = {
+        'numpy', 'np',
+        'pandas', 'pd',
+        'math',
+        'datetime', 'timedelta',
+        'warnings',
+        'Factor',  # 允许从基类导入
+        'talib',   # 技术分析库
+        'scipy',   # 科学计算
+        'sklearn', # 机器学习
+        'statsmodels'  # 统计模型
     }
 
     def __init__(self):
@@ -120,62 +163,111 @@ class MacroFactor:
             
         return (name in self.ALLOWED_BUILTINS or 
                 name in self.ALLOWED_ATTRIBUTES or
+                name in self.ALLOWED_IMPORTS or  # 添加对允许导入模块的检查
                 name in {'np', 'pd'} or  # Allow numpy and pandas
                 not name.startswith('__'))  # Prevent access to special methods
 
-    def _is_safe_ast(self, node, allow_assign=True) -> bool:
-        """Check if AST node is safe"""
+    def _is_safe_ast(self, node, allow_assign=True, error_info=None) -> bool:
+        """Check if AST node is safe
+        
+        Args:
+            node: AST node to check
+            allow_assign: Whether to allow assignment operations
+            error_info: List to collect error information
+        """
+        if error_info is None:
+            error_info = []
+            
+        def add_error(node, reason):
+            """Helper function to add error information"""
+            try:
+                line_no = getattr(node, 'lineno', 'unknown')
+                col_offset = getattr(node, 'col_offset', 'unknown')
+                code_str = ast.unparse(node) if hasattr(ast, 'unparse') else str(node)
+                if isinstance(node, (ast.ListComp, ast.GeneratorExp, ast.Lambda)):
+                    error_info.append({
+                        'line': line_no,
+                        'column': col_offset,
+                        'type': type(node).__name__,
+                        'code': code_str,
+                        'reason': reason
+                    })
+                    return False
+            except Exception:
+                pass
+            return False
+
         if isinstance(node, ast.Module):
-            # Check if module level nodes are safe
-            return all(self._is_safe_ast(subnode) for subnode in node.body)
+            return all(self._is_safe_ast(subnode, allow_assign, error_info) for subnode in node.body)
 
         if isinstance(node, (ast.Num, ast.Str, ast.Bytes, ast.NameConstant, ast.Constant)):
             return True
 
         if isinstance(node, ast.Name):
-            return self._is_safe_name(node.id)
+            if not self._is_safe_name(node.id):
+                return add_error(node, f"Unauthorized identifier: {node.id}")
+            return True
 
         if isinstance(node, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
                            ast.Pow, ast.Mod, ast.USub, ast.UAdd)):
             return True
 
+        if isinstance(node, ast.ListComp):
+            return add_error(node, "List comprehensions are not allowed")
+
+        if isinstance(node, ast.GeneratorExp):
+            return add_error(node, "Generator expressions are not allowed")
+
+        if isinstance(node, ast.Lambda):
+            return add_error(node, "Lambda functions are not allowed")
+
+        if isinstance(node, ast.Import):
+            # Check imports
+            for name in node.names:
+                if name.name not in self.ALLOWED_IMPORTS:
+                    return add_error(node, f"Unauthorized import: {name.name}")
+            return True
+
+        if isinstance(node, ast.ImportFrom):
+            # Check from-import statements
+            if node.module in self.DISALLOWED_MODULES:
+                return add_error(node, f"Import from disallowed module: {node.module}")
+            if node.module not in self.ALLOWED_IMPORTS and not any(
+                prefix and node.module.startswith(prefix) for prefix in self.ALLOWED_IMPORTS
+            ):
+                return add_error(node, f"Unauthorized module import: {node.module}")
+            return True
+
         if isinstance(node, ast.Attribute):
             if isinstance(node.value, ast.Name):
                 module = node.value.id
-                # Check if module is explicitly disallowed
                 if module in self.DISALLOWED_MODULES:
-                    print(f"Module access denied: {module}")
-                    return False
-                    
-                # Check if module is in allowed list and attribute is allowed
+                    return add_error(node, f"Access to disallowed module: {module}")
+                if module in ['np', 'pd']:
+                    if node.attr in self.ALLOWED_ATTRIBUTES[module]:
+                        return True
+                    if not node.attr.startswith('_'):
+                        return True
+                    return add_error(node, f"Access to private {module} attribute: {node.attr}")
                 if module in self.ALLOWED_ATTRIBUTES:
-                    return node.attr in self.ALLOWED_ATTRIBUTES[module]
-                
-                # For modules not explicitly allowed, deny all attribute access
-                print(f"Unauthorized module access: {module}.{node.attr}")
-                return False
-            # Check complex attribute chains (e.g. a.b.c)
+                    if node.attr not in self.ALLOWED_ATTRIBUTES[module]:
+                        return add_error(node, f"Unauthorized attribute access: {module}.{node.attr}")
+                    return True
+                return add_error(node, f"Unauthorized module access: {module}.{node.attr}")
             return self._is_safe_ast(node.value, allow_assign=False)
 
         if isinstance(node, ast.Call):
-            # Check function calls
             if isinstance(node.func, ast.Name):
-                # Built-in function calls, check if in allowed list
                 if node.func.id not in self.ALLOWED_BUILTINS:
-                    print(f"Function call denied: {node.func.id}")
-                    return False
-                # Check if all arguments are safe
+                    if node.func.id in ['np', 'pd']:
+                        return all(self._is_safe_ast(arg, allow_assign=False) for arg in node.args)
+                    return add_error(node, f"Unauthorized function call: {node.func.id}")
                 return all(self._is_safe_ast(arg, allow_assign=False) for arg in node.args)
-            # For method calls or calls after attribute access, check if the function is safe
             if isinstance(node.func, ast.Attribute):
-                # First check if attribute is safe
                 if not self._is_safe_ast(node.func, allow_assign=False):
                     return False
-                # Then check all arguments
                 return all(self._is_safe_ast(arg, allow_assign=False) for arg in node.args)
-            # For other types of calls (like lambda function calls), default to unsafe
-            print(f"Unsupported call type: {type(node.func).__name__}")
-            return False
+            return add_error(node, "Unsupported call type")
 
         if isinstance(node, ast.Expr):
             return self._is_safe_ast(node.value, allow_assign=False)
@@ -197,7 +289,6 @@ class MacroFactor:
         if isinstance(node, (ast.List, ast.Tuple)):
             return all(self._is_safe_ast(elt, allow_assign=False) for elt in node.elts)
         
-        # Support dictionary literals
         if isinstance(node, ast.Dict):
             return (all(self._is_safe_ast(k, allow_assign=False) for k in node.keys if k is not None) and
                    all(self._is_safe_ast(v, allow_assign=False) for v in node.values))
@@ -214,61 +305,41 @@ class MacroFactor:
                    
         if isinstance(node, ast.ClassDef):
             # Check class definition
-            # Check base classes
             if not all(self._is_safe_ast(base) for base in node.bases):
-                print(f"Unsafe base classes in class {node.name}")
-                return False
-            # Check decorators
+                return add_error(node, f"Unsafe base classes in class {node.name}")
             if node.decorator_list and not all(self._is_safe_ast(dec) for dec in node.decorator_list):
-                print(f"Unsafe decorators in class {node.name}")
-                return False
-            # Check class body
+                return add_error(node, f"Unsafe decorators in class {node.name}")
             return all(self._is_safe_ast(stmt) for stmt in node.body)
             
         if isinstance(node, ast.FunctionDef):
-            # Check function definition
-            # Check decorators
             if node.decorator_list and not all(self._is_safe_ast(dec) for dec in node.decorator_list):
-                print(f"Unsafe decorators in function {node.name}")
-                return False
-            # Check default arguments
+                return add_error(node, f"Unsafe decorators in function {node.name}")
             if node.args.defaults and not all(self._is_safe_ast(default) for default in node.args.defaults):
-                print(f"Unsafe default arguments in function {node.name}")
-                return False
-            # Check function body
+                return add_error(node, f"Unsafe default arguments in function {node.name}")
             return all(self._is_safe_ast(stmt) for stmt in node.body)
             
         if isinstance(node, ast.Subscript):
-            # Check subscript operations
-            # Check accessed object
             if not self._is_safe_ast(node.value, allow_assign=False):
                 return False
-            # Check subscript value
             if isinstance(node.slice, ast.Constant):
-                # For constant subscripts, check value directly
                 return True
             elif isinstance(node.slice, ast.Name):
-                # For variable subscripts, check variable name
                 return self._is_safe_name(node.slice.id)
             elif isinstance(node.slice, ast.Slice):
-                # For slice operations, check start and end values
                 return (
                     (node.slice.lower is None or self._is_safe_ast(node.slice.lower, allow_assign=False)) and
                     (node.slice.upper is None or self._is_safe_ast(node.slice.upper, allow_assign=False)) and
                     (node.slice.step is None or self._is_safe_ast(node.slice.step, allow_assign=False))
                 )
             else:
-                # For other types of subscript operations, check subscript expression
                 return self._is_safe_ast(node.slice, allow_assign=False)
                 
         if isinstance(node, ast.Return):
-            # Check return value
             if node.value is None:
                 return True
             return self._is_safe_ast(node.value, allow_assign=False)
 
-        print(f"Unsafe operation detected: {type(node).__name__}")
-        return False
+        return True  # 对于其他类型的节点，默认允许
 
     def _validate_formula(self, formula: str) -> bool:
         """Validate formula safety"""
@@ -445,29 +516,8 @@ class MacroFactor:
         result_expr = formula.upper()
         print(f"Result expression: {result_expr}")
         
-        # Pre-calculate and cache intermediate results
-        if 'RETURNS' in result_expr:
-            print("Pre-calculating RETURNS")
-            if 'close' not in self.base_factors:
-                raise ValueError("RETURNS calculation requires 'close' factor")
-            
-            # Calculate and cache RETURNS
-            returns_close = FactorUtils.RETURNS(self.base_factors['close'])
-            context['RETURNS'] = returns_close
-            context['RETURNS_CLOSE'] = returns_close
-            
-            # If STDDEV(RETURNS(CLOSE)) is needed, pre-calculate and cache
-            if 'STDDEV(RETURNS(CLOSE)' in result_expr:
-                print("Pre-calculating STDDEV(RETURNS(CLOSE))")
-                returns_stddev = FactorUtils.STDDEV(returns_close, window=20)
-                context['RETURNS_STDDEV'] = returns_stddev
-                result_expr = result_expr.replace('STDDEV(RETURNS(CLOSE), 20)', 'RETURNS_STDDEV')
-            
-            result_expr = result_expr.replace('RETURNS(CLOSE)', 'RETURNS_CLOSE')
-        
         # Execute formula
         print("Executing result expression")
-        print(f"Optimized expression: {result_expr}")
         try:
             result = eval(result_expr, context)
             print(f"Result type: {type(result)}")
@@ -817,209 +867,43 @@ warnings.filterwarnings('ignore')
             return None
     
     def validate_factor(self, code: str, code_type: str = 'formula', timeout: int = 5) -> dict:
-        """
-        Validate factor code for syntax, factor existence, and formula correctness
-        
-        Args:
-            code: The factor code (either formula string or class code)
-            code_type: Type of factor code ('formula' or 'class')
-            timeout: Maximum execution time in seconds (default: 5)
-            
-        Returns:
-            dict containing validation results with keys:
-            - is_valid: bool indicating overall validation status
-            - syntax_errors: list of syntax errors if any
-            - missing_factors: list of missing factors if any
-            - formula_errors: list of formula errors if any
-            - timeout: bool indicating if execution timed out
-        """
+        """Validate factor code"""
         result = {
             'is_valid': True,
             'syntax_errors': [],
             'missing_factors': [],
             'formula_errors': [],
+            'unsafe_operations': [],
             'timeout': False
         }
         
         try:
-            if code_type == 'formula':
-                # Validate formula syntax
-                if not self._validate_formula(code):
-                    result['is_valid'] = False
-                    result['syntax_errors'].append("Invalid formula syntax")
-                    return result
-                
-                # Extract and validate required factors
-                required_factors = self._extract_factor_names(code)
-                if not required_factors:
-                    result['is_valid'] = False
-                    result['missing_factors'].append("No valid factors found in formula")
-                    return result
-                
-                # Check if factors exist
-                available_factors = self.data_provider.get_available_factors()
-                missing = [f for f in required_factors if f.upper() not in available_factors]
-                if missing:
-                    result['is_valid'] = False
-                    result['missing_factors'].extend(missing)
-                
-                # Verify formula logic (with timeout control)
-                try:
-                    import threading
-                    import queue
-                    
-                    def execute_formula(q):
-                        try:
-                            # Create a simple context to test formula
-                            test_context = {}
-                            
-                            # Add all base factors to context
-                            for factor in self.FACTOR_MAP.values():
-                                test_context[factor] = pd.Series([1])
-                                test_context[factor.upper()] = pd.Series([1])
-                            
-                            # Add factor calculation functions to context
-                            factor_functions = {}
-                            
-                            # Get all public methods from FactorUtils
-                            for method_name in dir(FactorUtils):
-                                if not method_name.startswith('_'):  # Skip private methods
-                                    method = getattr(FactorUtils, method_name)
-                                    factor_functions[method_name] = lambda *args, **kwargs: pd.Series([1])
-                                    factor_functions[method_name.upper()] = lambda *args, **kwargs: pd.Series([1])
-                            
-                            test_context.update(factor_functions)
-                            
-                            # Add math functions to context
-                            test_context.update({
-                                'np': np,
-                                'pd': pd
-                            })
-                            
-                            # Execute formula
-                            eval(code, test_context)
-                            q.put(None)
-                        except Exception as e:
-                            q.put(e)
-                    
-                    q = queue.Queue()
-                    t = threading.Thread(target=execute_formula, args=(q,))
-                    t.daemon = True
-                    t.start()
-                    t.join(timeout=timeout)
-                    
-                    if t.is_alive():
-                        result['is_valid'] = False
-                        result['timeout'] = True
-                        result['formula_errors'].append(f"Formula execution timed out after {timeout} seconds")
-                    else:
-                        error = q.get()
-                        if error is not None:
-                            result['is_valid'] = False
-                            result['formula_errors'].append(f"Formula execution error: {str(error)}")
-                        
-                except Exception as e:
-                    result['is_valid'] = False
-                    result['formula_errors'].append(f"Formula execution error: {str(e)}")
-                    
-            elif code_type == 'python':
-                # Validate class code syntax
-                try:
-                    tree = ast.parse(code)
-                except SyntaxError as e:
-                    result['is_valid'] = False
-                    result['syntax_errors'].append(f"Invalid class syntax: {str(e)}")
-                    return result
-                
-                # Validate class definition
-                class_nodes = [node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)]
-                if not class_nodes:
-                    result['is_valid'] = False
-                    result['syntax_errors'].append("No class definition found")
-                    return result
-                
-                # Validate inheritance relationship
-                for class_node in class_nodes:
-                    if not any(isinstance(base, ast.Name) and base.id == 'Factor' 
-                             for base in class_node.bases):
-                        result['is_valid'] = False
-                        result['syntax_errors'].append(f"Class {class_node.name} must inherit from Factor")
-                
-                # Validate calculate method
-                for class_node in class_nodes:
-                    calculate_methods = [node for node in class_node.body 
-                                       if isinstance(node, ast.FunctionDef) and node.name == 'calculate']
-                    if not calculate_methods:
-                        result['is_valid'] = False
-                        result['syntax_errors'].append(f"Class {class_node.name} must implement calculate method")
-                
-                # Extract and validate required factors
-                required_factors = set()
-                for node in ast.walk(tree):
-                    if (isinstance(node, ast.Subscript) and 
-                        isinstance(node.value, ast.Name) and 
-                        node.value.id == 'factors' and
-                        isinstance(node.slice, ast.Constant)):
-                        required_factors.add(node.slice.value)
-                
-                if not required_factors:
-                    result['is_valid'] = False
-                    result['missing_factors'].append("No factor requirements found in code")
-                    return result
-                
-                # Check if factors exist
-                available_factors = self.data_provider.get_available_factors()
-                missing = [f for f in required_factors if f not in available_factors]
-                if missing:
-                    result['is_valid'] = False
-                    result['missing_factors'].extend(missing)
-                
-                # Verify class code logic (with timeout control)
-                try:
-                    import threading
-                    import queue
-                    
-                    def execute_class(q):
-                        try:
-                            # Create a simple context to test class
-                            from panda_factor.generate.factor_base import Factor
-                            test_context = {
-                                'Factor': Factor,
-                                'pd': pd,
-                                'np': np
-                            }
-                            exec(code, test_context)
-                            q.put(None)
-                        except Exception as e:
-                            q.put(e)
-                    
-                    q = queue.Queue()
-                    t = threading.Thread(target=execute_class, args=(q,))
-                    t.daemon = True
-                    t.start()
-                    t.join(timeout=timeout)
-                    
-                    if t.is_alive():
-                        result['is_valid'] = False
-                        result['timeout'] = True
-                        result['formula_errors'].append(f"Class execution timed out after {timeout} seconds")
-                    else:
-                        error = q.get()
-                        if error is not None:
-                            result['is_valid'] = False
-                            result['formula_errors'].append(f"Class execution error: {str(error)}")
-                        
-                except Exception as e:
-                    result['is_valid'] = False
-                    result['formula_errors'].append(f"Class execution error: {str(e)}")
-            
-            else:
+            # Parse code
+            try:
+                tree = ast.parse(code)
+            except SyntaxError as e:
                 result['is_valid'] = False
-                result['syntax_errors'].append(f"Invalid code_type: {code_type}")
+                result['syntax_errors'].append(f"Syntax error at line {e.lineno}: {e.msg}")
+                return result
             
-            return result
+            # Check for unsafe operations
+            error_info = []
+            for node in ast.walk(tree):
+                self._is_safe_ast(node, error_info=error_info)
+            
+            # Only collect important unsafe operations
+            if error_info:
+                result['is_valid'] = False
+                for err in error_info:
+                    result['unsafe_operations'].append(
+                        f"Line {err['line']}: {err['type']} is not allowed - {err['reason']}"
+                    )
+                return result
+            
+            # Continue with other validations...
             
         except Exception as e:
             result['is_valid'] = False
             result['syntax_errors'].append(f"Validation error: {str(e)}")
-            return result
+            
+        return result

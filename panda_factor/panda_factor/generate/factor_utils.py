@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from typing import Tuple
 
 
 class FactorUtils:
@@ -300,8 +301,37 @@ class FactorUtils:
         
     @staticmethod
     def VWAP(close: pd.Series, volume: pd.Series) -> pd.Series:
-        """Calculate volume weighted average price"""
-        return (close * volume).groupby(level='symbol').sum() / volume.groupby(level='symbol').sum()
+        """Calculate volume weighted average price
+        
+        Args:
+            close: Price series
+            volume: Volume series
+            
+        Returns:
+            pd.Series: Volume weighted average price series
+        """
+        # Ensure both series have the same index
+        close, volume = close.align(volume)
+        
+        # Calculate VWAP for each symbol
+        def calculate_vwap(group_close, group_volume):
+            # Calculate price * volume
+            pv = group_close * group_volume
+            # Calculate rolling sum of price * volume and volume
+            pv_sum = pv.rolling(window=20, min_periods=1).sum()
+            v_sum = group_volume.rolling(window=20, min_periods=1).sum()
+            # Calculate VWAP
+            return pv_sum / v_sum
+            
+        # Group by symbol and calculate VWAP
+        result = pd.Series(index=close.index, dtype=float)
+        for symbol in close.index.get_level_values('symbol').unique():
+            mask = close.index.get_level_values('symbol') == symbol
+            symbol_close = close[mask]
+            symbol_volume = volume[mask]
+            result[mask] = calculate_vwap(symbol_close, symbol_volume)
+            
+        return result
         
     @staticmethod
     def CAP(close: pd.Series, shares: pd.Series) -> pd.Series:
@@ -665,12 +695,6 @@ class FactorUtils:
         return TRIX
 
     @staticmethod
-    def VR(CLOSE: pd.Series, VOL: pd.Series, M1: int = 26) -> pd.Series:
-        """Volume Ratio"""
-        LC = FactorUtils.REF(CLOSE, 1)
-        return FactorUtils.SUM(FactorUtils.IF(CLOSE > LC, VOL, 0), M1) / FactorUtils.SUM(FactorUtils.IF(CLOSE <= LC, VOL, 0), M1) * 100
-
-    @staticmethod
     def EMV(HIGH: pd.Series, LOW: pd.Series, VOL: pd.Series, N: int = 14, M: int = 9) -> pd.Series:
         """Calculate EMV indicator, returns EMV line"""
         VOLUME = FactorUtils.MA(VOL, N) / VOL
@@ -737,15 +761,72 @@ class FactorUtils:
 
     @staticmethod
     def OBV(CLOSE: pd.Series, VOL: pd.Series) -> pd.Series:
-        """On Balance Volume"""
-        return FactorUtils.SUM(FactorUtils.IF(CLOSE > FactorUtils.REF(CLOSE, 1), VOL, FactorUtils.IF(CLOSE < FactorUtils.REF(CLOSE, 1), -VOL, 0)), 0) / 10000
+        """On Balance Volume
+        
+        OBV is calculated by adding volume on up days and subtracting volume on down days.
+        
+        Args:
+            CLOSE: Close price series
+            VOL: Volume series
+            
+        Returns:
+            pd.Series: OBV values
+        """
+        # Calculate price changes
+        price_changes = CLOSE - FactorUtils.REF(CLOSE, 1)
+        # Create volume series with signs based on price changes
+        signed_volume = pd.Series(
+            np.where(price_changes > 0, VOL, 
+                    np.where(price_changes < 0, -VOL, 0)),
+            index=VOL.index
+        )
+        # Calculate cumulative sum for each symbol
+        return signed_volume.groupby(level='symbol').cumsum() / 10000
 
     @staticmethod
     def MFI(CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, VOL: pd.Series, N: int = 14) -> pd.Series:
-        """Money Flow Index (Volume RSI)"""
+        """Money Flow Index (Volume RSI)
+        
+        MFI is a volume-weighted RSI that shows buying and selling pressure.
+        Uses vectorized operations for better performance.
+        
+        Args:
+            CLOSE: Close price series
+            HIGH: High price series
+            LOW: Low price series
+            VOL: Volume series
+            N: Calculation period, default 14
+            
+        Returns:
+            pd.Series: MFI values ranging from 0 to 100
+        """
+        # Calculate typical price and money flow in one step
         TYP = (HIGH + LOW + CLOSE) / 3
-        V1 = FactorUtils.SUM(FactorUtils.IF(TYP > FactorUtils.REF(TYP, 1), TYP * VOL, 0), N) / FactorUtils.SUM(FactorUtils.IF(TYP < FactorUtils.REF(TYP, 1), TYP * VOL, 0), N)
-        return 100 - (100 / (1 + V1))
+        raw_money_flow = TYP * VOL
+        
+        # Calculate price changes using groupby shift
+        price_changes = TYP.groupby(level='symbol').diff()
+        
+        # Vectorized calculation of positive and negative money flows
+        pos_flow = raw_money_flow.where(price_changes > 0, 0)
+        neg_flow = raw_money_flow.where(price_changes < 0, 0)
+        
+        # Calculate rolling sums for positive and negative flows
+        pos_sum = pos_flow.groupby(level='symbol').rolling(window=N, min_periods=1).sum().droplevel(0)
+        neg_sum = neg_flow.groupby(level='symbol').rolling(window=N, min_periods=1).sum().droplevel(0)
+        
+        # Calculate money ratio and MFI in one step
+        money_ratio = pos_sum / neg_sum.replace(0, 1e-10)  # Avoid division by zero
+        mfi = 100 - (100 / (1 + money_ratio))
+        
+        # Handle edge cases vectorized
+        total_flow = pos_sum + neg_sum
+        mfi = np.where(total_flow == 0, 50,  # No money flow
+                np.where(neg_sum == 0, 100,   # No negative flow
+                    np.where(pos_sum == 0, 0,  # No positive flow
+                        mfi)))
+        
+        return pd.Series(mfi, index=CLOSE.index)
 
     @staticmethod
     def ASI(OPEN: pd.Series, CLOSE: pd.Series, HIGH: pd.Series, LOW: pd.Series, M1: int = 26, M2: int = 10) -> pd.Series:
