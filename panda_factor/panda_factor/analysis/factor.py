@@ -27,15 +27,21 @@ class factor():
         self.df_stock = pd.DataFrame()  # 储存不同分组持仓股票矩阵
         self.df_turnover = pd.DataFrame()  # 储存计算过后的组内换手率
         self.df_ic = pd.DataFrame()  # 储存IC值、滞后N期-IC矩阵
-        self.logger=logging.Logger
+        self.logger = logging.Logger
         self.df_group = pd.DataFrame()  # 储存多空分组不同周期平均收益率和标准差矩阵
 
         # 使用动态分组数量创建统计指标矩阵
         group_names = [f'分组{i}' for i in range(1, self.group_cnt + 1)]
-        self.df_info = pd.DataFrame(index=group_names + ['多空组合', '多空组合2'],
-                                    columns=['年化收益率', '超额年化', '最大回撤', '超额最大回撤', '年化波动',
-                                             '超额年化波动', '换手率', '月度胜率', '超额月度胜率', '跟踪误差',
-                                             '夏普比率', '信息比率'])  # 储存多空分组年化、夏普等统计指标矩阵
+        if self.group_cnt >= 4:
+            self.df_info = pd.DataFrame(index=group_names + ['多空组合', '多空组合2'],
+                                        columns=['年化收益率', '超额年化', '最大回撤', '超额最大回撤', '年化波动',
+                                                 '超额年化波动', '换手率', '月度胜率', '超额月度胜率', '跟踪误差',
+                                                 '夏普比率', '信息比率'])  # 储存多空分组年化、夏普等统计指标矩阵
+        else:
+            self.df_info = pd.DataFrame(index=group_names + ['多空组合'],
+                                        columns=['年化收益率', '超额年化', '最大回撤', '超额最大回撤', '年化波动',
+                                                 '超额年化波动', '换手率', '月度胜率', '超额月度胜率', '跟踪误差',
+                                                 '夏普比率', '信息比率'])  # 储存多空分组年化、夏普等统计指标矩阵
         self.df_info2 = pd.DataFrame(index=[self.name],
                                      columns=['IC_mean', 'Rank_IC', 'IC_std', 'IC_IR', 'IR', 'P(IC<-0.02)',
                                               'P(IC>0.02)', 't统计量', 'p-value', '单调性']).T  # 储存因子IC各项评估信息
@@ -151,7 +157,11 @@ class factor():
             return self.df_info2
 
     def cal_df_info1(self) -> None:
-        for i in range(1, self.group_cnt + 3):
+        if self.group_cnt >= 4:
+            _group_number = self.group_cnt + 3
+        else:
+            _group_number = self.group_cnt + 2
+        for i in range(1, _group_number):
             if i <= self.group_cnt:
                 group_return = self.df_pnl[f'group{i}_pnl']
                 group_pro = self.df_pnl[f'group{i}_pro']
@@ -160,12 +170,14 @@ class factor():
                 group_return = self.df_pnl['group_ls']
                 group_pro = self.df_pnl['group_ls_pro']
                 self.df_info.iloc[i - 1]['换手率'] = str_round(
-                    (self.df_turnover.iloc[:, 0].mean() + self.df_turnover.iloc[:, self.group_cnt - 1].mean()) / 2, 4, True)
+                    (self.df_turnover.iloc[:, 0].mean() + self.df_turnover.iloc[:, self.group_cnt - 1].mean()) / 2, 4,
+                    True)
             elif i == self.group_cnt + 2:  # 多空组合2
                 group_return = self.df_pnl['group_ls_2']
                 group_pro = self.df_pnl['group_ls_2_pro']
                 self.df_info.iloc[i - 1]['换手率'] = str_round(
-                    (self.df_turnover.iloc[:, 1].mean() + self.df_turnover.iloc[:, self.group_cnt - 2].mean()) / 2, 4, True)
+                    (self.df_turnover.iloc[:, 1].mean() + self.df_turnover.iloc[:, self.group_cnt - 2].mean()) / 2, 4,
+                    True)
 
             annualized_return = np.mean(group_return) * (252 / self.period)
             self.df_info.iloc[i - 1]['年化收益率'] = str_round(annualized_return, 4, True)
@@ -217,7 +229,7 @@ class factor():
         self.df_info2.loc['IR', self.name] = str_round(ir_value.mean(), 4)
         self.df_info2.loc['P(IC>0.02)', self.name] = str_round(np.sum((ic_value) > 0.02) / len(ic_value), 4, True)
         self.df_info2.loc['P(IC<-0.02)', self.name] = str_round(np.sum((ic_value) < -0.02) / len(ic_value), 4, True)
-        ic_value=ic_value.fillna(0)
+        ic_value = ic_value.fillna(0)
         # t_stat, p_value = ttest_ind(ic_value, np.zeros(len(ic_value)))
 
         t_stat, p_value = ttest_1samp(ic_value, popmean=0)
@@ -225,8 +237,10 @@ class factor():
         self.df_info2.loc['p-value', self.name] = str_round(p_value, 4)
 
         # 根据动态分组获取年化收益率排名
-        ann_return_rankings = self.df_info.iloc[0:self.group_cnt]['年化收益率'].str.replace('%', '').astype(float).reset_index(drop=True)
-        self.df_info2.loc['单调性', self.name] = str_round(abs(ann_return_rankings.corr(pd.Series(np.arange(1, self.group_cnt + 1)))), 2)
+        ann_return_rankings = self.df_info.iloc[0:self.group_cnt]['年化收益率'].str.replace('%', '').astype(
+            float).reset_index(drop=True)
+        self.df_info2.loc['单调性', self.name] = str_round(
+            abs(ann_return_rankings.corr(pd.Series(np.arange(1, self.group_cnt + 1)))), 2)
         # factor_path = 'D:\\quant\\project\\Backtesting\\single-factor\\factor_lib\\' + self.name
         # self.df_info2.to_csv(factor_path + '\\IC统计指标.csv')
 
@@ -298,12 +312,13 @@ class factor():
                     df_pnl['group_ls'] = df_pnl[f'group{self.group_cnt}_pnl'] - df_pnl[f'group1_pnl']
                     df_pnl['group_ls_pro'] = df_pnl[f'group{self.group_cnt}_pro'] - df_pnl[f'group1_pro']
             elif n == self.group_cnt + 2:  # 多空组合2
-                if self.predict_direction == 0:
-                    df_pnl['group_ls_2'] = df_pnl[f'group2_pnl'] - df_pnl[f'group{self.group_cnt - 1}_pnl']
-                    df_pnl['group_ls_2_pro'] = df_pnl[f'group2_pro'] - df_pnl[f'group{self.group_cnt - 1}_pro']
-                else:
-                    df_pnl['group_ls_2'] = df_pnl[f'group{self.group_cnt - 1}_pnl'] - df_pnl[f'group2_pnl']
-                    df_pnl['group_ls_2_pro'] = df_pnl[f'group{self.group_cnt - 1}_pro'] - df_pnl[f'group2_pro']
+                if self.group_cnt >= 4:
+                    if self.predict_direction == 0:
+                        df_pnl['group_ls_2'] = df_pnl[f'group2_pnl'] - df_pnl[f'group{self.group_cnt - 1}_pnl']
+                        df_pnl['group_ls_2_pro'] = df_pnl[f'group2_pro'] - df_pnl[f'group{self.group_cnt - 1}_pro']
+                    else:
+                        df_pnl['group_ls_2'] = df_pnl[f'group{self.group_cnt - 1}_pnl'] - df_pnl[f'group2_pnl']
+                        df_pnl['group_ls_2_pro'] = df_pnl[f'group{self.group_cnt - 1}_pro'] - df_pnl[f'group2_pro']
 
         self.df_pnl = df_pnl
 
@@ -340,16 +355,18 @@ class factor():
             axes[0].plot(self.df_pnl.index, self.df_pnl['group_ls'].cumsum(),
                          label=f'group 1-{self.group_cnt}', color='black',
                          linestyle='--', linewidth=1.5)
-            axes[0].plot(self.df_pnl.index, self.df_pnl['group_ls_2'].cumsum(),
-                         label=f'group 2-{self.group_cnt-1}', color='purple',
-                         linestyle='--', linewidth=1.5)
+            if self.group_cnt >= 4:
+                axes[0].plot(self.df_pnl.index, self.df_pnl['group_ls_2'].cumsum(),
+                             label=f'group 2-{self.group_cnt - 1}', color='purple',
+                             linestyle='--', linewidth=1.5)
         else:
             axes[0].plot(self.df_pnl.index, self.df_pnl['group_ls'].cumsum(),
                          label=f'group {self.group_cnt}-1', color='black',
                          linestyle='--', linewidth=1.5)
-            axes[0].plot(self.df_pnl.index, self.df_pnl['group_ls_2'].cumsum(),
-                         label=f'group {self.group_cnt-1}-2', color='purple',
-                         linestyle='--', linewidth=1.5)
+            if self.group_cnt >= 4:
+                axes[0].plot(self.df_pnl.index, self.df_pnl['group_ls_2'].cumsum(),
+                             label=f'group {self.group_cnt - 1}-2', color='purple',
+                             linestyle='--', linewidth=1.5)
 
         axes[0].set_title(f'{self.name} {self.group_cnt} groups return')
 
@@ -365,16 +382,18 @@ class factor():
             axes[1].plot(self.df_pnl.index, self.df_pnl['group_ls_pro'].cumsum(),
                          label=f'group 1-{self.group_cnt}', color='black',
                          linestyle='--', linewidth=1.5)
-            axes[1].plot(self.df_pnl.index, self.df_pnl['group_ls_2_pro'].cumsum(),
-                         label=f'group 2-{self.group_cnt-1}', color='purple',
-                         linestyle='--', linewidth=1.5)
+            if self.group_cnt >= 4:
+                axes[1].plot(self.df_pnl.index, self.df_pnl['group_ls_2_pro'].cumsum(),
+                             label=f'group 2-{self.group_cnt - 1}', color='purple',
+                             linestyle='--', linewidth=1.5)
         else:
             axes[1].plot(self.df_pnl.index, self.df_pnl['group_ls_pro'].cumsum(),
                          label=f'group {self.group_cnt}-1', color='black',
                          linestyle='--', linewidth=1.5)
-            axes[1].plot(self.df_pnl.index, self.df_pnl['group_ls_2_pro'].cumsum(),
-                         label=f'group {self.group_cnt-1}-2', color='purple',
-                         linestyle='--', linewidth=1.5)
+            if self.group_cnt >= 4:
+                axes[1].plot(self.df_pnl.index, self.df_pnl['group_ls_2_pro'].cumsum(),
+                             label=f'group {self.group_cnt - 1}-2', color='purple',
+                             linestyle='--', linewidth=1.5)
 
         axes[1].set_title(f'{self.name} {self.group_cnt} groups excess return')
         axes[1].legend(loc='upper left', prop={'size': 10}, ncol=2)
@@ -484,6 +503,7 @@ class factor():
         plt.tight_layout()  # 调整子图参数，使之填充整个图像区域
         # plt.savefig(f'D:\\quant\\project\\Backtesting\\single-factor\\factor_lib\\{self.name}\\IC衰减图.png', dpi=200)
         plt.show()
+
     def ic_sequential_to_chart_data(self, ic_type: int = 0) -> ChartData:
         """
         # IC|Rank_IC时序图
@@ -547,20 +567,20 @@ class factor():
             ic_value.fillna(0, inplace=True)
             mu = np.mean(ic_value)
             sigma = np.std(ic_value)
-            n,bins =np.histogram(ic_value, bins=60,density=True)
-            y = norm.pdf(bins,mu,sigma)
+            n, bins = np.histogram(ic_value, bins=60, density=True)
+            y = norm.pdf(bins, mu, sigma)
             title = f'{self.name} Rank_IC distribution skew={str_round(ic_value.skew(), 3)} kurt={str_round(ic_value.kurt(), 3)}'
 
             # 创建x轴和y轴数据
             x_data = [SeriesItem(name="Rank_IC", data=bins.tolist())]
             y_data = [
-                SeriesItem(name="Density",data= n.tolist()),
-                SeriesItem(name="Density", data=norm.pdf(bins,mu,sigma).tolist())
+                SeriesItem(name="Density", data=n.tolist()),
+                SeriesItem(name="Density", data=norm.pdf(bins, mu, sigma).tolist())
             ]
         else:
             # 使用普通IC
             ic_value = self.df_ic['ic']
-            ic_value.fillna(0,inplace=True)
+            ic_value.fillna(0, inplace=True)
             mu = np.mean(ic_value)
             sigma = np.std(ic_value)
             n, bins = np.histogram(ic_value, bins=60, density=True)
@@ -586,10 +606,10 @@ class factor():
         date_strs = [str(date) for date in dates]
         x_data = [SeriesItem(name="date", data=date_strs)]
         if self.predict_direction:
-            y_data = [SeriesItem(name=f"组{self.group_cnt}", data=self.df_pnl[f'group{self.group_cnt}_pnl'].fillna(0).cumsum().tolist())]
+            y_data = [SeriesItem(name=f"组{self.group_cnt}",
+                                 data=self.df_pnl[f'group{self.group_cnt}_pnl'].fillna(0).cumsum().tolist())]
         else:
             y_data = [SeriesItem(name="组1", data=self.df_pnl[f'group1_pnl'].fillna(0).cumsum().tolist())]
-
 
         return ChartData(
             title=f'{self.name} one groups return',
@@ -602,7 +622,7 @@ class factor():
         dates = self.df_ic.index.tolist()
         date_strs = [str(date) for date in dates]
         x_data = [SeriesItem(name="date", data=date_strs)]
-        y_data =[]
+        y_data = []
         for group_idx in range(1, self.group_cnt + 1):
             y_data.append(SeriesItem(
                 name=f'组{group_idx}',
@@ -614,26 +634,29 @@ class factor():
                 name=f'多空组合(组{self.group_cnt}-组1)',
                 data=self.df_pnl['group_ls'].fillna(0).cumsum().tolist()
             ))
-            y_data.append(SeriesItem(
-                name=f'多空组合2(组{self.group_cnt-1}-组2)',
-                data=self.df_pnl['group_ls_2'].fillna(0).cumsum().tolist()
-            ))
+            if self.group_cnt >= 4:
+                y_data.append(SeriesItem(
+                    name=f'多空组合2(组{self.group_cnt - 1}-组2)',
+                    data=self.df_pnl['group_ls_2'].fillna(0).cumsum().tolist()
+                ))
         else:
             # 添加多空组合数据
             y_data.append(SeriesItem(
                 name=f'多空组合(组1-组{self.group_cnt})',
                 data=self.df_pnl['group_ls'].fillna(0).cumsum().tolist()
             ))
-            y_data.append(SeriesItem(
-                name=f'多空组合2(组2-组{self.group_cnt-1})',
-                data=self.df_pnl['group_ls_2'].fillna(0).cumsum().tolist()
-            ))
+            if self.group_cnt >= 4:
+                y_data.append(SeriesItem(
+                    name=f'多空组合2(组2-组{self.group_cnt - 1})',
+                    data=self.df_pnl['group_ls_2'].fillna(0).cumsum().tolist()
+                ))
         return ChartData(
             title=f'{self.name} {self.group_cnt} groups return',
             x=x_data,
             y=y_data
         )
-    def excess_return_to_chart_data(self)-> ChartData:
+
+    def excess_return_to_chart_data(self) -> ChartData:
         # 将索引转换为日期列表
         dates = self.df_ic.index.tolist()
         date_strs = [str(date) for date in dates]
@@ -650,19 +673,21 @@ class factor():
                 name=f'多空组合(组{self.group_cnt}-组1)',
                 data=self.df_pnl['group_ls'].fillna(0).cumsum().tolist()
             ))
-            y_data.append(SeriesItem(
-                name=f'多空组合2(组{self.group_cnt - 1}-组2)',
-                data=self.df_pnl['group_ls_2'].cumsum().fillna(0).tolist()
-            ))
+            if self.group_cnt >= 4:
+                y_data.append(SeriesItem(
+                    name=f'多空组合2(组{self.group_cnt - 1}-组2)',
+                    data=self.df_pnl['group_ls_2'].cumsum().fillna(0).tolist()
+                ))
         else:
             y_data.append(SeriesItem(
                 name=f'多空组合(组1-组{self.group_cnt})',
                 data=self.df_pnl['group_ls'].fillna(0).cumsum().tolist()
             ))
-            y_data.append(SeriesItem(
-                name=f'多空组合2(组2-组{self.group_cnt - 1})',
-                data=self.df_pnl['group_ls_2'].fillna(0).cumsum().tolist()
-            ))
+            if self.group_cnt >= 4:
+                y_data.append(SeriesItem(
+                    name=f'多空组合2(组2-组{self.group_cnt - 1})',
+                    data=self.df_pnl['group_ls_2'].fillna(0).cumsum().tolist()
+                ))
 
         return ChartData(
             title=f'{self.name} {self.group_cnt} groups excess return',
@@ -755,7 +780,8 @@ class factor():
             x=x_data,
             y=y_data
         )
-    def calculate_performance_metrics(self,return_ratio):
+
+    def calculate_performance_metrics(self, return_ratio):
         """
         计算收益率相关的性能指标
 
@@ -767,12 +793,12 @@ class factor():
         """
         try:
             if self.predict_direction:
-                df=self.df_info.iloc[self.group_cnt-1]
+                df = self.df_info.iloc[self.group_cnt - 1]
             else:
-                df=self.df_info.iloc[0]
+                df = self.df_info.iloc[0]
             return {
                 'return_ratio': f"{return_ratio:.2%}",  # 收益率
-                'annualized_ratio': df.loc['年化收益率'],#年化收益率
+                'annualized_ratio': df.loc['年化收益率'],  # 年化收益率
                 'sharpe_ratio': df.loc['夏普比率'],
                 'maximum_drawdown': df.loc['最大回撤']
             }
@@ -787,19 +813,18 @@ class factor():
                 'calmar_ratio': 0.0
             }
 
-    def inset_to_database(self, factor_id: str = None,task_id=None) -> None:
+    def inset_to_database(self, factor_id: str = None, task_id=None) -> None:
         """
         将因子分析结果保存到数据库
-        
+
         参数:
         - factor_id: 因子ID，用于日志记录
         """
-        logger=self.logger
+        logger = self.logger
         try:
             from panda_common.handlers.database_handler import DatabaseHandler
             from panda_common.config import config
 
-            
             # # 如果传入了factor_id，尝试查询相关任务信息
             # if factor_id:
             #     try:
@@ -832,12 +857,12 @@ class factor():
                     return data.dict()
                 else:
                     return data
-            
+
             # 确保返回数据不为空
             if self.df_pnl.empty:
                 logger.warning(f"factor {self.name}  df_pnl empty ，can't save to database")
                 return
-                
+
             # 准备文档数据
             try:
                 # ========== 收益率图数据 ==========
@@ -874,7 +899,7 @@ class factor():
                 simple_return_chart = self.simple_return_chart()
 
                 # ========== 调用函数计算性能指标 ==========
-                one_group_data = self.calculate_performance_metrics(round(simple_return_chart.y[0].data[-1],4))
+                one_group_data = self.calculate_performance_metrics(round(simple_return_chart.y[0].data[-1], 4))
 
                 # ========== 最新一天的因子值 TOP20 ==========
                 try:
@@ -891,7 +916,7 @@ class factor():
                             if col not in ['date', 'symbol', 'name']:  # 不转换非数值列
                                 top_20[col] = top_20[col].astype(str)
                         # 转换成列表格式而不是字典格式
-                        top_20=top_20[['date', 'symbol', 'name',value_col]]
+                        top_20 = top_20[['date', 'symbol', 'name', value_col]]
                         last_date_top_factor_dict = top_20.to_dict(orient='records')
                 except Exception as e:
                     logger.error(f"处理最新一天因子值时出错: {str(e)}")
@@ -955,10 +980,10 @@ class factor():
                     "group_return_analysis": group_return_analysis,
                     "factor_data_analysis": factor_data_analysis
                 }
-                
+
                 # 保存到数据库
                 logger.debug(f"正在将因子分析结果保存到数据库: {self.name}")
-                result =None
+                result = None
 
                 collection = _db_handler.get_mongo_collection("panda", "factor_analysis_results")
                 result = collection.update_one(
@@ -966,16 +991,17 @@ class factor():
                     {"$set": document},
                     upsert=True
                 )
-                
+
                 if result and (result.modified_count > 0 or result.upserted_id):
 
-                    logger.debug(f"因子分析结果已保存到数据库: {self.name}, 修改: {result.modified_count}, 插入: {result.upserted_id}")
+                    logger.debug(
+                        f"因子分析结果已保存到数据库: {self.name}, 修改: {result.modified_count}, 插入: {result.upserted_id}")
                 else:
                     logger.warning(f"未修改数据库中的因子记录: {self.name}")
             except Exception as doc_e:
                 logger.error(f"准备文档数据时出错: {str(doc_e)}")
                 traceback.print_exc()
-                
+
         except Exception as e:
             logger.error(f"保存因子分析结果到数据库失败: {self.name}, 错误: {str(e)}")
             traceback.print_exc()
