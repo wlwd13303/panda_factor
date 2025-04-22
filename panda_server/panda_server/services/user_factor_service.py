@@ -82,7 +82,7 @@ def get_user_factor_list(
     """
     try:
         # 验证排序参数
-        valid_sort_fields = ["created_at", "return_ratio", "sharpe_ratio", "maximum_drawdown", "IC", "IR"]
+        valid_sort_fields = ["created_at","created_at", "return_ratio", "sharpe_ratio", "maximum_drawdown", "IC", "IR"]
         if sort_field not in valid_sort_fields:
             raise HTTPException(status_code=400, detail=f"不支持的排序字段: {sort_field}")
 
