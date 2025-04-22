@@ -15,7 +15,7 @@ async def user_factor_list_route(
     user_id: str,
     page: int = Query(default=1, ge=1, description="页码"),
     page_size: int = Query(default=10, ge=1, le=100, description="每页数量"),
-    sort_field: str = Query(default="created_at", description="排序字段，支持created_at、return_ratio、sharpe_ratio、maximum_drawdown、IC、IR"),
+    sort_field: str = Query(default="created_at", description="排序字段，支持updated_at、created_at、return_ratio、sharpe_ratio、maximum_drawdown、IC、IR"),
     sort_order: str = Query(default="desc", description="排序方式，asc升序，desc降序")
 ):
     """
