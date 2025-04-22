@@ -8,7 +8,6 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, Query
 from bson import ObjectId
 import traceback
-import panda_data
 from panda_common.handlers.log_handler import get_factor_logger
 from panda_factor.analysis.factor_analysis import factor_analysis
 from panda_common.handlers.database_handler import DatabaseHandler
