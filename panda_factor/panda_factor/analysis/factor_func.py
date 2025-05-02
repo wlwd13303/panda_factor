@@ -603,7 +603,10 @@ def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, log
         
         # Use qcut for grouping and ensure the number of groups is correct
         try:
-            new_group[f'{factor_name}_group'] = pd.qcut(group[factor_name].dropna(), q=group_cnt, labels=range(1, group_cnt+1))
+            # Add a small random noise to ensure unique bin edges
+            noise = np.random.normal(0, 1e-10, size=group[factor_name].dropna().shape)
+            noisy_values = group[factor_name].dropna().values + noise
+            new_group[f'{factor_name}_group'] = pd.qcut(noisy_values, q=group_cnt, labels=range(1, group_cnt+1))
         except ValueError as e:
             if logger:
                 logger.error(f"{factor_name},{date},grouping failed: {str(e)}")
@@ -612,16 +615,16 @@ def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, log
             continue
 
         grouped_dfs.append(new_group)
-    
+        
     # Merge all processed groups
     if grouped_dfs:
         df_cuted = pd.concat(grouped_dfs)
     else:
         df_cuted = pd.DataFrame()  # If there's no valid data, return an empty DataFrame
-    
+        
     # Convert benchmark index returns to DataFrame
     df_benchmark = pd.DataFrame(benchmark_pct).T
-    
+
     return df_cuted, df_benchmark
 
 def change_code(s):
