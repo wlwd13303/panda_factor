@@ -156,7 +156,8 @@ factor = panda_data.get_factor_by_name(factor_name="VH03cc651", start_date='2024
 
 ## 加群答疑或商务合作
 ![微信](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WX20250416-231919.png)
-
+## 数据相关问题答疑
+![微信](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG68.jpg)
 ## 贡献
 
 欢迎贡献代码、提出 Issue 或 PR：

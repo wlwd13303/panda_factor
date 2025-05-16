@@ -6,9 +6,21 @@ HUB_END_DATE: 20250321
 # 数据更新时间(每日) 
 UPDATE_TIME: '20:00'
 
+# 股票数据更新时间(每日)
+STOCKS_UPDATE_TIME: "20:00"
+# 因子数据更新时间(每日)
+FACTOR_UPDATE_TIME: "20:30"
+
 # 数据源
 DATASOURCE: tqsdk
-
+DATAHUBSOURCE: ""
+#米筐账号密码
+MUSER: ""
+MPASSWORD: ""
+# TUSHARE TOKEN
+TS_TOKEN: ""
+# 讯投  TOKEN
+XT_TOKEN: ''
 # 数据源验证信息
 USER: xxxxxx
 PASSWORD: xxxxxx
