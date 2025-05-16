@@ -74,48 +74,104 @@ class FactorReader:
             factor_logger.error("\n=== Factor Class Error ===")
             factor_logger.error(f"Error in factor class execution: {str(e)}")
             factor_logger.error(f"Error type: {type(e)}")
-            
+            # def get_factor(self, symbols, factors, start_date, end_date):
+            """Get factor data with optimized queries"""
+            # Convert parameters to list if they're not already
+
+    # def get_factor(self, symbols, factors, start_date, end_date):
+    #     """Get factor data with optimized queries"""
+    #     # Convert parameters to list if they're not already
+    #     if isinstance(symbols, str):
+    #         symbols = [symbols]
+    #     if isinstance(factors, str):
+    #         factors = [factors]
+    #
+    #     if symbols == None or symbols == []:
+    #         symbols = self.all_symbols
+    #
+    #     all_data = []
+    #
+    #     # Query each factor table
+    #     for factor in factors:
+    #         query = {
+    #             "symbol": {"$in": symbols},
+    #             "date": {
+    #                 "$gte": start_date,
+    #                 "$lte": end_date
+    #             }
+    #         }
+    #
+    #         # Get data from MongoDB with index hint
+    #         records = self.db_handler.mongo_find(
+    #             self.config["MONGO_DB"],
+    #             f"factor_{factor}",
+    #             query  # 强制使用复合索引
+    #         )
+    #
+    #         if records:
+    #             # Convert to DataFrame
+    #             df = pd.DataFrame(list(records))
+    #             # Rename value column to factor name
+    #             df = df.rename(columns={"value": factor})
+    #             all_data.append(df)
+    #
+    #     if not all_data:
+    #         logger.warning(f"No data found for the specified parameters")
+    #         return None
+    #
+    #     # Merge all dataframes on date and symbol
+    #     result = all_data[0]
+    #     for df in all_data[1:]:
+    #         result = pd.merge(
+    #             result,
+    #             df,
+    #             on=['date', 'symbol'],
+    #             how='outer'
+    #         )
+    #     return result.drop(columns=['_id'])
+
+
     def get_factor(self, symbols, factors, start_date, end_date):
-        """Get factor data with optimized queries"""
-        # Convert parameters to list if they're not already
+
         if isinstance(symbols, str):
             symbols = [symbols]
         if isinstance(factors, str):
             factors = [factors]
-        
+
         if symbols == None or symbols == []:
             symbols = self.all_symbols
-            
+
         all_data = []
-        
-        # Query each factor table
-        for factor in factors:
+        # 检查是否有基础因子
+        base_factors = ["open", "close", "high", "low", "volume","market_cap", "turnover","amount"]
+        requested_base_factors = [f for f in factors if f in base_factors]
+
+        # 如果有基础因子，查一次库，再选择留什么字段
+        if requested_base_factors:
+            # 单次查询 factor_base 表
             query = {
                 "symbol": {"$in": symbols},
-                "date": {
-                    "$gte": start_date,
-                    "$lte": end_date
-                }
+                "date": {"$gte": start_date, "$lte": end_date}
             }
-            
-            # Get data from MongoDB with index hint
             records = self.db_handler.mongo_find(
                 self.config["MONGO_DB"],
-                f"factor_{factor}",
-                query  # 强制使用复合索引
+                "factor_base",
+                query
             )
-            
             if records:
                 # Convert to DataFrame
                 df = pd.DataFrame(list(records))
-                # Rename value column to factor name
-                df = df.rename(columns={"value": factor})
+                # 只保留需要的字段
+                base_fields = ['date', 'symbol']  # 基础字段
+                available_factors = [f for f in requested_base_factors if f in df.columns]
+                selected_fields = base_fields + available_factors
+                df = df[selected_fields]
                 all_data.append(df)
-        
+
         if not all_data:
             logger.warning(f"No data found for the specified parameters")
             return None
-            
+
         # Merge all dataframes on date and symbol
         result = all_data[0]
         for df in all_data[1:]:
@@ -125,7 +181,7 @@ class FactorReader:
                 on=['date', 'symbol'],
                 how='outer'
             )
-        return result.drop(columns=['_id'])
+        return result
     
     def get_custom_factor(self, factor_logger:logging.Logger, user_id, factor_name, start_date, end_date):
         try:
