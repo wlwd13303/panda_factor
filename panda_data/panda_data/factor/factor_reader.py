@@ -12,7 +12,8 @@ class FactorReader:
         # Initialize DatabaseHandler
         self.db_handler = DatabaseHandler(config)
         self.all_symbols = self.get_all_symbols()
-    
+
+
     def _print_formula_error(self, e, formula, factor_logger:logging.Logger):
         """打印公式因子的错误信息"""
         if isinstance(e, SyntaxError):

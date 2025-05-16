@@ -22,7 +22,7 @@ panda_data_hub/
 ```
 ## 下载最新数据库
 因表结构更新，请在网盘下载最新的数据库
-网盘链接：
+网盘链接： https://pan.baidu.com/s/1qnUFy7dw6O2yxa_0rE_2MQ?pwd=iayk 提取码: iayk
 
 ## 下载相关依赖包
 迅投Quant不支持苹果系统
