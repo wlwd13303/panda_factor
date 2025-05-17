@@ -20,10 +20,10 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-app.include_router(data_query.router, prefix="/api/v1", tags=["data_query"])
-app.include_router(config_redefine.router, prefix="/api/v1", tags=["config_redefine"])
-app.include_router(factor_data_clean.router, prefix="/api/v1", tags=["factor_data_clean"])
-app.include_router(stock_market_data_clean.router, prefix="/api/v1", tags=["stock_market_data_clean"])
+app.include_router(data_query.router, prefix="/datahub/api/v1", tags=["data_query"])
+app.include_router(config_redefine.router, prefix="/datahub/api/v1", tags=["config_redefine"])
+app.include_router(factor_data_clean.router, prefix="/datahub/api/v1", tags=["factor_data_clean"])
+app.include_router(stock_market_data_clean.router, prefix="/datahub/api/v1", tags=["stock_market_data_clean"])
 @app.get("/")
 async def home():
     return {"message": "Welcome to the Panda Server!"}
