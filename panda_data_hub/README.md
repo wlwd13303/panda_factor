@@ -32,7 +32,7 @@ pip install requirements.txt -r
 ```
 
 ## 修改配置文件
-url: http://localhost:5174/#/datahubSource
+url: http://localhost:8080/factor/#/datahubsource
 配置文件路径：
 1. 股票清洗必须早于因子清洗（建议间隔≥5分钟）
 2. 推荐清洗时段：交易日19:30后
@@ -42,14 +42,14 @@ url: http://localhost:5174/#/datahubSource
 ![配置页面](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG56.jpg)
 
 ## 数据列表
-url: http://localhost:5174/#/datahublist/
+url: http://localhost:8080/factor/#/datahublist
 1. 标注为非交易日的日期数据条数为0是正确的
 2. 数据差异不为0，说明当日的因子数据清洗存在问题，请重新清洗
 ![数据列表页面](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG57.jpg)
 
 ## 股票及因子数据清洗
-url: http://localhost:5174/#/datahubdataclean
-url: http://localhost:5174/#/datahubFactorClean
+url: http://localhost:8080/factor/#/datahubdataclean
+url: http://localhost:8080/factor/#/datahubFactorClean
 1. 请先清洗股票数据再清洗因子数据
 2. 迅投Quant需先下载数据到本地，所以先下载数据，再清洗数据
 ![数据清洗页面](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG69.jpg)
