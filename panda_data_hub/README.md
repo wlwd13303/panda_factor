@@ -55,7 +55,7 @@ url: http://localhost:8080/factor/#/datahubFactorClean
 ![数据清洗页面](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG69.jpg)
 
 ## ❓数据答疑
-![微信](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG68.jpg)
+![微信](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/WechatIMG75.jpg)
 ## 🤝贡献
 
 欢迎贡献代码、提出 Issue 或 PR：
