@@ -1,3 +1,5 @@
+import math
+
 from statsmodels.tsa.stattools import acf
 from panda_factor.analysis.factor_func import *
 from panda_common.models.chart_data import *
@@ -197,10 +199,14 @@ class factor():
             self.df_info.iloc[i - 1]['超额最大回撤'] = str_round(max_drawdown, 4, True)
 
             sharpe_ratio = (annualized_return - 0.025) / annualized_volatility
+            if not math.isfinite(sharpe_ratio):  # 如果是inf或nan
+                sharpe_ratio = 0
             self.df_info.iloc[i - 1]['夏普比率'] = str_round(sharpe_ratio, 4)
 
             excess_annualized_return = group_pro.mean() * (252 / self.period)
             tracking_error = np.sqrt(np.sum(group_pro ** 2) / (len(group_pro) - 1))
+            if not math.isfinite(tracking_error):  # 如果是inf或nan
+                tracking_error = 0
             self.df_info.iloc[i - 1]['跟踪误差'] = str_round(tracking_error, 4)
 
             self.df_info.iloc[i - 1]['超额年化'] = str_round(excess_annualized_return, 4, True)
@@ -214,6 +220,8 @@ class factor():
             self.df_info.iloc[i - 1]['超额月度胜率'] = str_round(win_pro_rate, 4, True)
 
             IR = excess_annualized_return / annualized_pro_volatility
+            if not math.isfinite(IR):  # 如果是inf或nan
+                IR = 0
             self.df_info.iloc[i - 1]['信息比率'] = str_round(IR, 4)
 
             # factor_path = 'D:\\quant\\project\\Backtesting\\single-factor\\factor_lib\\' + self.name
@@ -987,7 +995,7 @@ class factor():
 
                 collection = _db_handler.get_mongo_collection("panda", "factor_analysis_results")
                 result = collection.update_one(
-                    {"factor_name": self.name},
+                    {"factor_id": factor_id},
                     {"$set": document},
                     upsert=True
                 )

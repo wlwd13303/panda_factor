@@ -20,6 +20,8 @@ seaborn>=0.13.0
 # Trading & Market Data
 rqdatac>=2.9.0
 tqsdk>=3.2.10
+tushare>=1.4.21
+chinese_calendar>=1.10.0
 
 # Task Scheduling
 apscheduler>=3.10.1

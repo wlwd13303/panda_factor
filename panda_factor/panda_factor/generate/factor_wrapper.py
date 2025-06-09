@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 
+
 class FactorSeries:
     def __init__(self, series):
         self.series = series
@@ -69,13 +70,15 @@ class FactorSeries:
             return self.series != other.series
         return self.series != other
 
+
 class FactorDataWrapper:
     def __init__(self, data_dict):
         self.data_dict = data_dict
-    
+
     def __getitem__(self, key):
-        
+
         if isinstance(key, str):
+            key = key.lower()
             if key not in self.data_dict:
                 print(f"Key {key} not found")
                 raise KeyError(f"Factor {key} not found")
@@ -83,10 +86,10 @@ class FactorDataWrapper:
             if not isinstance(series, pd.Series):
                 series = pd.Series(series)
             return FactorSeries(series)
-        
+
         print(f"Invalid key type: {type(key)}")
         raise KeyError(f"Invalid key type: {type(key)}")
-    
+
     def __setitem__(self, key, value):
         print(f"\nSetting factor with key: {key}")
-        self.data_dict[key] = value 
+        self.data_dict[key] = value
