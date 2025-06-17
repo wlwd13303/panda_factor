@@ -31,18 +31,18 @@ import panda_data
 #     df.pop('prev_close')
 #     df.pop('div_factors')
 #     return df
-def cal_hfq(df:pd.DataFrame) -> pd.DataFrame:
+def cal_hfq(df: pd.DataFrame) -> pd.DataFrame:
     """
     # Calculate backward adjusted prices and future returns for 1/3/5/10/20/30 days
     :param df: DataFrame to be processed
     """
     df = df.sort_values(by='date')
-    df['pct'] = df['close'] / df['pre_close'] - 1 # Daily return
-    df['div_factors'] = (1 + df['pct']).cumprod()   # Adjustment factor
+    df['pct'] = df['close'] / df['pre_close'] - 1  # Daily return
+    df['div_factors'] = (1 + df['pct']).cumprod()  # Adjustment factor
     df.at[df.index[0], 'div_factors'] = 1
-    df['hfq_open'] = df.iloc[0]['open'] * df['div_factors'] / df.iloc[0]['div_factors']   # Backward adjusted open price
-    df['1day_return'] = df['hfq_open'].shift(-2) / df['hfq_open'].shift(-1) - 1   # 1-day return/daily return
-    df['3day_return'] = df['hfq_open'].shift(-4) / df['hfq_open'].shift(-1) - 1   # 3-day return
+    df['hfq_open'] = df.iloc[0]['open'] * df['div_factors'] / df.iloc[0]['div_factors']  # Backward adjusted open price
+    df['1day_return'] = df['hfq_open'].shift(-2) / df['hfq_open'].shift(-1) - 1  # 1-day return/daily return
+    df['3day_return'] = df['hfq_open'].shift(-4) / df['hfq_open'].shift(-1) - 1  # 3-day return
     df['5day_return'] = df['hfq_open'].shift(-6) / df['hfq_open'].shift(-1) - 1  # 5-day/weekly return
     df['10day_return'] = df['hfq_open'].shift(-11) / df['hfq_open'].shift(-1) - 1  # 10-day/biweekly return
     df['20day_return'] = df['hfq_open'].shift(-21) / df['hfq_open'].shift(-1) - 1  # 20-day/monthly return
@@ -52,37 +52,41 @@ def cal_hfq(df:pd.DataFrame) -> pd.DataFrame:
     df.pop('div_factors')
     return df
 
-def cal_hfq2(df:pd.DataFrame) -> pd.DataFrame:
+
+def cal_hfq2(df: pd.DataFrame) -> pd.DataFrame:
     """
     # Calculate backward adjusted OHLC and future returns for 1/5/10/20 days
     :param df: DataFrame to be processed
     """
     df = df.sort_values(by='trade_date')
-    df['pct'] = df['close'] / df['pre_close'] - 1 # Daily return
-    df['div_factors'] = (1 + df['pct']).cumprod()   # Adjustment factor
+    df['pct'] = df['close'] / df['pre_close'] - 1  # Daily return
+    df['div_factors'] = (1 + df['pct']).cumprod()  # Adjustment factor
     df.head(1)['div_factors'] = 1
-    df['hfq_open'] = df.iloc[0]['open'] * df['div_factors'] / df.iloc[0]['div_factors']   # Backward adjusted open price
-    df['hfq_high'] = df.iloc[0]['high'] * df['div_factors'] / df.iloc[0]['div_factors']   # Backward adjusted high price
-    df['hfq_low'] = df.iloc[0]['low'] * df['div_factors'] / df.iloc[0]['div_factors']   # Backward adjusted low price
-    df['hfq_close'] = df.iloc[0]['close'] * df['div_factors'] / df.iloc[0]['div_factors']   # Backward adjusted close price
-    df['1day_return'] = df['hfq_open'].shift(-2) / df['hfq_open'].shift(-1) - 1   # 1-day return/daily return
+    df['hfq_open'] = df.iloc[0]['open'] * df['div_factors'] / df.iloc[0]['div_factors']  # Backward adjusted open price
+    df['hfq_high'] = df.iloc[0]['high'] * df['div_factors'] / df.iloc[0]['div_factors']  # Backward adjusted high price
+    df['hfq_low'] = df.iloc[0]['low'] * df['div_factors'] / df.iloc[0]['div_factors']  # Backward adjusted low price
+    df['hfq_close'] = df.iloc[0]['close'] * df['div_factors'] / df.iloc[0][
+        'div_factors']  # Backward adjusted close price
+    df['1day_return'] = df['hfq_open'].shift(-2) / df['hfq_open'].shift(-1) - 1  # 1-day return/daily return
     df['5day_return'] = df['hfq_open'].shift(-6) / df['hfq_open'].shift(-1) - 1  # 5-day/weekly return
     df['10day_return'] = df['hfq_open'].shift(-11) / df['hfq_open'].shift(-1) - 1  # 10-day/biweekly return
     df['20day_return'] = df['hfq_open'].shift(-21) / df['hfq_open'].shift(-1) - 1  # 20-day/monthly return
-    #df.pop('pre_close')
+    # df.pop('pre_close')
     df.pop('div_factors')
     return df
 
-def cal_pct_lag(df:pd.DataFrame)->pd.DataFrame:
+
+def cal_pct_lag(df: pd.DataFrame) -> pd.DataFrame:
     """
     # Calculate stock returns lagged by 1-20 days
     :param df: DataFrame to be processed
     """
-    for i in range(0,21):
+    for i in range(0, 21):
         df[f'returns_lag{i}'] = df.groupby('symbol')['1day_return'].transform(lambda x: x.shift(-i))
     return df
 
-def str_round(number:float, decimal_places:int, percentage:bool=False) -> str:
+
+def str_round(number: float, decimal_places: int, percentage: bool = False) -> str:
     """
     # Custom rounding method with higher precision
     :param number: Number to be processed
@@ -95,7 +99,7 @@ def str_round(number:float, decimal_places:int, percentage:bool=False) -> str:
         # If percentage display is needed
         if percentage:
             rounded_number *= 100
-            format_string = "{:." + str(decimal_places-2) + "f}%"
+            format_string = "{:." + str(decimal_places - 2) + "f}%"
         else:
             format_string = "{:." + str(decimal_places) + "f}"
         # Use string formatting to truncate decimals
@@ -103,6 +107,7 @@ def str_round(number:float, decimal_places:int, percentage:bool=False) -> str:
         return result_str
     else:
         return ""  # Return empty string for NaN values
+
 
 def clean_k_data(df_k_data: pd.DataFrame) -> pd.DataFrame:
     """
@@ -127,18 +132,19 @@ def clean_k_data(df_k_data: pd.DataFrame) -> pd.DataFrame:
 
     # 移除不再需要的列
     # columns_to_drop = ['limit_up', 'limit_down', 'high', 'low', 'total_turnover', 'volume', 'num_trades']
-    columns_to_drop = ['limit_up', 'limit_down', 'high', 'low', 'volume' ]
+    columns_to_drop = ['limit_up', 'limit_down', 'high', 'low', 'volume']
     df_k_data = df_k_data.drop(columns=columns_to_drop)
 
     return df_k_data
 
-def read_kdata(start_date:str,end_date:str,field:list=[])->pd.DataFrame:
+
+def read_kdata(start_date: str, end_date: str, field: list = []) -> pd.DataFrame:
     """
     # Read K-line data
     :param start_date: Start date of data
     :param end_date: End date of data (inclusive)
     :param field: Fields to keep (['trade_date'(default),'ts_code'(default),'name'(default),'open'(default),'high','low','close'(default),'pre_close'(default),
-    'vol','amount','turnover_rate','limit_up','limit_down','unable_trade'(default),'industry'(default),'total_mv'(default),'circ_mv'])   
+    'vol','amount','turnover_rate','limit_up','limit_down','unable_trade'(default),'industry'(default),'total_mv'(default),'circ_mv'])
     """
 
     df_list = []
@@ -151,12 +157,14 @@ def read_kdata(start_date:str,end_date:str,field:list=[])->pd.DataFrame:
             df_list.append(df_temp)
 
     df_kdata = pd.concat(df_list)
-    df_kdata['trade_date'] = pd.to_datetime(df_kdata['trade_date'],format='%Y-%m-%d')
-    df_kdata = df_kdata[['trade_date','ts_code','name','open','close','pre_close','unable_trade','industry','total_mv'] + field]
+    df_kdata['trade_date'] = pd.to_datetime(df_kdata['trade_date'], format='%Y-%m-%d')
+    df_kdata = df_kdata[
+        ['trade_date', 'ts_code', 'name', 'open', 'close', 'pre_close', 'unable_trade', 'industry', 'total_mv'] + field]
 
     return df_kdata
 
-def read_kdata_min(start_time:str,end_time:str,code_list:list=[])->pd.DataFrame:
+
+def read_kdata_min(start_time: str, end_time: str, code_list: list = []) -> pd.DataFrame:
     """
     # Read 1-minute K-line data
     :param start_date: Start date of data
@@ -176,13 +184,14 @@ def read_kdata_min(start_time:str,end_time:str,code_list:list=[])->pd.DataFrame:
     df = df[(df['trade_time'] >= start_time) & (df['trade_time'] <= end_time)]
 
     df['trade_time'] = pd.to_datetime(df['trade_time'], format='%Y%m%d %H:%M:%S')
-    
+
     return df
 
-def get_all_stock_code()->list:
+
+def get_all_stock_code() -> list:
     """
     # Get a list of all stocks that have been listed
-    """    
+    """
     path_list = []
     folder_path = "D:\\quant\\project\\Backtesting\\single-factor\\stock_data\\data_1min_kline"
     for path in os.listdir(folder_path):
@@ -190,12 +199,13 @@ def get_all_stock_code()->list:
     path_list = [i[:-4] for i in path_list]
     return path_list
 
-def read_capital_flow(start_date:str,end_date:str)->pd.DataFrame:
+
+def read_capital_flow(start_date: str, end_date: str) -> pd.DataFrame:
     """
     # Read capital flow data
     :param start_date: Start date of data
-    :param end_date: End date of data (inclusive) 
-    # Field explanation:  
+    :param end_date: End date of data (inclusive)
+    # Field explanation:
     buy_sm_vol       Small order buy volume (lots)
     buy_sm_amount    Small order buy amount (10,000 yuan)
     sell_sm_vol      Small order sell volume (lots)
@@ -226,16 +236,17 @@ def read_capital_flow(start_date:str,end_date:str)->pd.DataFrame:
             df_list.append(df_temp)
 
     df_capital_flow = pd.concat(df_list)
-    df_capital_flow['trade_date'] = pd.to_datetime(df_capital_flow['trade_date'],format='%Y-%m-%d')
+    df_capital_flow['trade_date'] = pd.to_datetime(df_capital_flow['trade_date'], format='%Y-%m-%d')
 
     return df_capital_flow
 
-def read_north(start_date:str,end_date:str)->pd.DataFrame:
+
+def read_north(start_date: str, end_date: str) -> pd.DataFrame:
     """
     # Read northbound capital data
     :param start_date: Start date of data
     :param end_date: End date of data (inclusive)
-    # Field explanation:  
+    # Field explanation:
     code        Original code
     trade_date  Trading date
     ts_code     TS code
@@ -255,16 +266,17 @@ def read_north(start_date:str,end_date:str)->pd.DataFrame:
             df_list.append(df_temp)
 
     df_north = pd.concat(df_list)
-    df_north['trade_date'] = pd.to_datetime(df_north['trade_date'],format='%Y-%m-%d')
+    df_north['trade_date'] = pd.to_datetime(df_north['trade_date'], format='%Y-%m-%d')
 
     return df_north
 
-def read_margin_trading(start_date:str,end_date:str)->pd.DataFrame:
+
+def read_margin_trading(start_date: str, end_date: str) -> pd.DataFrame:
     """
     # Read margin trading data
     :param start_date: Start date of data
-    :param end_date: End date of data (inclusive) 
-    # Field explanation:  
+    :param end_date: End date of data (inclusive)
+    # Field explanation:
     ts_code      Stock code
     rzye         Margin balance (yuan)
     rqye         Short selling balance (yuan)
@@ -292,16 +304,17 @@ def read_margin_trading(start_date:str,end_date:str)->pd.DataFrame:
             df_list.append(df_temp)
 
     df_margin_trading = pd.concat(df_list)
-    df_margin_trading['trade_date'] = pd.to_datetime(df_margin_trading['trade_date'],format='%Y-%m-%d')
+    df_margin_trading['trade_date'] = pd.to_datetime(df_margin_trading['trade_date'], format='%Y-%m-%d')
 
     return df_margin_trading
 
-def read_daily_basic(start_date:str,end_date:str)->pd.DataFrame:
+
+def read_daily_basic(start_date: str, end_date: str) -> pd.DataFrame:
     """
     # Read daily indicator data
     :param start_date: Start date of data
-    :param end_date: End date of data (inclusive) 
-    # Field explanation:  
+    :param end_date: End date of data (inclusive)
+    # Field explanation:
     ts_code           TS stock code
     trade_date        Trading date
     close             Closing price of the day
@@ -332,23 +345,22 @@ def read_daily_basic(start_date:str,end_date:str)->pd.DataFrame:
             df_list.append(df_temp)
 
     df_margin_trading = pd.concat(df_list)
-    df_margin_trading['trade_date'] = pd.to_datetime(df_margin_trading['trade_date'],format='%Y-%m-%d')
+    df_margin_trading['trade_date'] = pd.to_datetime(df_margin_trading['trade_date'], format='%Y-%m-%d')
 
     return df_margin_trading
 
 
-
-def read_factor(factor_name_list:list, start_date:str, end_date:str) -> pd.DataFrame:
+def read_factor(factor_name_list: list, start_date: str, end_date: str) -> pd.DataFrame:
     """
     # Read multiple factor data and merge them
     :param factor_name_list: List of factor names
     :param start_date: Start date of data
     :param end_date: End date of data (inclusive)
     """
-    
+
     df_factor_merged = None
     factor_path_base = 'D:\\quant\\project\\Backtesting\\single-factor\\factor_lib\\'
-    
+
     for factor_name in factor_name_list:
         df_list = []
         factor_path = factor_path_base + factor_name + '\\csv'
@@ -360,31 +372,31 @@ def read_factor(factor_name_list:list, start_date:str, end_date:str) -> pd.DataF
                 df_list.append(df_temp)
         df_factor = pd.concat(df_list)
         df_factor['trade_date'] = pd.to_datetime(df_factor['trade_date'], format='%Y-%m-%d')
-        
-        
+
         if df_factor_merged is None:
             df_factor_merged = df_factor
         else:
             # Merge by trading date, can adjust merging method as needed
-            df_factor_merged = pd.merge(df_factor_merged, df_factor, on=['trade_date','ts_code'], how='outer')
-    
+            df_factor_merged = pd.merge(df_factor_merged, df_factor, on=['trade_date', 'ts_code'], how='outer')
+
     if df_factor_merged is None:
         return pd.DataFrame()  # Return empty DataFrame in case of None
     return df_factor_merged
 
-def read_jtfactor(path:str) -> pd.DataFrame:
+
+def read_jtfactor(path: str) -> pd.DataFrame:
     """
     # Read multiple factor data and merge them
     :param path: Network path for factor file
     """
     df_factor = pd.read_parquet(path)
     df_factor['ts_code'] = df_factor['order_book_id'].apply(change_code)
-    df_factor.insert(0,'trade_date',df_factor.pop('date'))
+    df_factor.insert(0, 'trade_date', df_factor.pop('date'))
     df_factor.pop('order_book_id')
     return df_factor
 
 
-def read_barra(start_date:str,end_date:str) -> pd.DataFrame:
+def read_barra(start_date: str, end_date: str) -> pd.DataFrame:
     """
     # Read Barra factor data
     :param start_date: Start date of data
@@ -397,13 +409,17 @@ def read_barra(start_date:str,end_date:str) -> pd.DataFrame:
         if start_date <= date <= end_date:
             df_list.append(pd.read_csv(f'{path_barra}\\{path}'))
     df_barra = pd.concat(df_list)
-    df_barra['trade_date'] = pd.to_datetime(df_barra['trade_date'],format='%Y-%m-%d')
-    df_barra.rename(columns={'book_to_price_ratio':'BP Value Factor','leverage':'LEVERAGE Factor','liquidity':'LIQUIDTY Factor','beta':'BETA Market Factor','growth':'GROWTH Factor',
-                 'residual_volatility':'RESVOL Volatility Factor','non_linear_size':'SIZENL Non-linear Size Factor',
-                 'earnings_yield':'EARNYILD Earnings Factor','momentum':'MOMENTUM Factor','size':'SIZE Market Cap Factor'},inplace=True)
+    df_barra['trade_date'] = pd.to_datetime(df_barra['trade_date'], format='%Y-%m-%d')
+    df_barra.rename(columns={'book_to_price_ratio': 'BP Value Factor', 'leverage': 'LEVERAGE Factor',
+                             'liquidity': 'LIQUIDTY Factor', 'beta': 'BETA Market Factor', 'growth': 'GROWTH Factor',
+                             'residual_volatility': 'RESVOL Volatility Factor',
+                             'non_linear_size': 'SIZENL Non-linear Size Factor',
+                             'earnings_yield': 'EARNYILD Earnings Factor', 'momentum': 'MOMENTUM Factor',
+                             'size': 'SIZE Market Cap Factor'}, inplace=True)
     return df_barra
 
-def cal_barra_corr(df_factor:pd.DataFrame) -> pd.DataFrame:
+
+def cal_barra_corr(df_factor: pd.DataFrame) -> pd.DataFrame:
     """
     # Calculate Barra factor correlation, returns correlation matrix
     :param df_factor: DataFrame with stock factor columns
@@ -411,14 +427,17 @@ def cal_barra_corr(df_factor:pd.DataFrame) -> pd.DataFrame:
     start_date = df_factor['trade_date'].astype(str).unique().min()
     end_date = df_factor['trade_date'].astype(str).unique().max()
     factor_list = df_factor.columns.tolist()[2:]
-    df_barra = read_barra(start_date,end_date)
+    df_barra = read_barra(start_date, end_date)
     df_merged = pd.merge(df_factor, df_barra, on=['ts_code', 'trade_date'], how='inner')
-    barra_factors = ['BP Value Factor', 'LEVERAGE Factor', 'LIQUIDTY Factor', 'BETA Market Factor', 'GROWTH Factor', 'RESVOL Volatility Factor', 'SIZENL Non-linear Size Factor', 'EARNYILD Earnings Factor', 'MOMENTUM Factor', 'SIZE Market Cap Factor']
+    barra_factors = ['BP Value Factor', 'LEVERAGE Factor', 'LIQUIDTY Factor', 'BETA Market Factor', 'GROWTH Factor',
+                     'RESVOL Volatility Factor', 'SIZENL Non-linear Size Factor', 'EARNYILD Earnings Factor',
+                     'MOMENTUM Factor', 'SIZE Market Cap Factor']
     correlation_matrix = df_merged.corr(numeric_only=True).loc[factor_list, barra_factors]
 
     return correlation_matrix.T
 
-def ext_out_mad(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
+
+def ext_out_mad(group: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
     # Median absolute deviation outlier removal
     :param group: Daily factor data DataFrame
@@ -431,24 +450,89 @@ def ext_out_mad(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
         edge_up = median + 3 * mad
         edge_low = median - 3 * mad
         factor.clip(lower=edge_low, upper=edge_up, inplace=True)
-        group[f] = factor 
-    return group
-
-def ext_out_3std(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
-    """
-    # 3-sigma outlier removal
-    :param group: Daily factor data DataFrame
-    :param factor_list: List of factor names to process
-    """
-    for f in factor_list:
-        factor = group[f]
-        edge_up = factor.mean() + 3 * factor.std()
-        edge_low = factor.mean() - 3 * factor.std()
-        factor.clip(lower=edge_low, upper=edge_up, inplace=True)
         group[f] = factor
     return group
 
-def market_value_neutralization(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
+
+# def ext_out_3std(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
+#     """
+#     # 3-sigma outlier removal
+#     :param group: Daily factor data DataFrame
+#     :param factor_list: List of factor names to process
+#     """
+#     for f in factor_list:
+#         factor = group[f]
+#         edge_up = factor.mean() + 3 * factor.std()
+#         edge_low = factor.mean() - 3 * factor.std()
+#         factor.clip(lower=edge_low, upper=edge_up, inplace=True)
+#         group[f] = factor
+#     return group
+def ext_out_3std(group: pd.DataFrame, factor_name: str, noise_std: float = 1e-10,
+                 ) -> pd.DataFrame:
+    """
+    # 3-sigma 异常值移除并添加噪音确保唯一的分箱边界
+    :param group: 日度因子数据 DataFrame
+    :param factor_name: 需要处理的因子名称
+    :param noise_std: 添加噪音的标准差，默认为 1e-10
+    :param group_cnt: 分箱的数量，默认为 5
+    """
+    # 获取指定因子的列
+    factor = group[factor_name]
+
+    # 添加噪音到因子列，噪音是均值为 0，标准差为 noise_std 的正态分布
+    noise = np.random.normal(0, noise_std, size=len(factor))
+    factor += noise  # 将噪音加到因子列
+
+    # 确保因子列是浮动类型，避免 dtype 不兼容
+    factor = factor.astype(float)
+
+    # 计算 3-sigma 范围的上下边界
+    edge_up = factor.mean() + 3 * factor.std()
+    edge_low = factor.mean() - 3 * factor.std()
+
+    # 使用 clip 限制因子的上下边界，去除异常值
+    factor.clip(lower=edge_low, upper=edge_up, inplace=True)
+
+    # 将因子列更新回去
+    group[factor_name] = factor
+
+    return group
+
+
+def ext_out_3std_list(group: pd.DataFrame, factor_list: list, noise_std: float = 1e-10,
+                      ) -> pd.DataFrame:
+    """
+    # 3-sigma 异常值移除并添加噪音确保唯一的分箱边界
+    :param group: 日度因子数据 DataFrame
+    :param factor_name: 需要处理的因子名称
+    :param noise_std: 添加噪音的标准差，默认为 1e-10
+    :param group_cnt: 分箱的数量，默认为 5
+    """
+    for f in factor_list:
+        # 获取指定因子的列
+        factor = group[f]
+
+        # 添加噪音到因子列，噪音是均值为 0，标准差为 noise_std 的正态分布
+        noise = np.random.normal(0, noise_std, size=len(factor))
+        factor += noise  # 将噪音加到因子列
+
+        # 确保因子列是浮动类型，避免 dtype 不兼容
+        factor = factor.astype(float)
+
+        # 计算 3-sigma 范围的上下边界
+        edge_up = factor.mean() + 3 * factor.std()
+        edge_low = factor.mean() - 3 * factor.std()
+
+        # 使用 clip 限制因子的上下边界，去除异常值
+        factor.clip(lower=edge_low, upper=edge_up, inplace=True)
+
+        # 将因子列更新回去
+        group[f] = factor
+
+    return group
+
+
+def market_value_neutralization(group: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
     # Market cap logarithm neutralization
     :param group: Daily factor data DataFrame
@@ -461,6 +545,7 @@ def market_value_neutralization(group:pd.DataFrame,factor_list:list) -> pd.DataF
         model = sm.OLS(y, X).fit()
         group[f] = model.resid
     return group
+
 
 def industry_neutralization(df: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
@@ -491,7 +576,8 @@ def industry_neutralization(df: pd.DataFrame, factor_list: list) -> pd.DataFrame
     df = df.drop(columns=industry_dummies.columns)
     return df
 
-def z_score(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
+
+def z_score(group: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
     # Z-score standardization
     :param group: Daily factor data DataFrame
@@ -505,6 +591,7 @@ def z_score(group:pd.DataFrame,factor_list:list) -> pd.DataFrame:
             group[f] = np.nan
     return group
 
+
 def barra_neutralization(df: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
     # Barra factor neutralization
@@ -514,11 +601,13 @@ def barra_neutralization(df: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
     start_date = df['trade_date'].astype(str).min()
     end_date = df['trade_date'].astype(str).max()
-    df_barra = read_barra(start_date,end_date)
+    df_barra = read_barra(start_date, end_date)
     df_merged = pd.merge(df, df_barra, on=['ts_code', 'trade_date'], how='inner')
 
     new_factor_list = []
-    barra_factors = ['BP Value Factor', 'LEVERAGE Factor', 'LIQUIDTY Factor', 'BETA Market Factor', 'GROWTH Factor', 'RESVOL Volatility Factor', 'SIZENL Non-linear Size Factor', 'EARNYILD Earnings Factor', 'MOMENTUM Factor', 'SIZE Market Cap Factor']
+    barra_factors = ['BP Value Factor', 'LEVERAGE Factor', 'LIQUIDTY Factor', 'BETA Market Factor', 'GROWTH Factor',
+                     'RESVOL Volatility Factor', 'SIZENL Non-linear Size Factor', 'EARNYILD Earnings Factor',
+                     'MOMENTUM Factor', 'SIZE Market Cap Factor']
 
     # Remove the influence of x factors on y factors, take the residuals of cross-sectional factors
     def del_factor_x(group):
@@ -534,11 +623,12 @@ def barra_neutralization(df: pd.DataFrame, factor_list: list) -> pd.DataFrame:
                 X = sm.add_constant(X)
                 group[new_factor_name] = sm.OLS(Y, X).fit().resid
         return group
-        
+
     df_merged = df_merged.groupby('trade_date', group_keys=False, observed=True).apply(del_factor_x)
     if df_merged is None:
         return pd.DataFrame()  # Return empty DataFrame in case of None
     return df_merged[['ts_code', 'trade_date'] + new_factor_list]
+
 
 def clean_df(df: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     """
@@ -553,7 +643,8 @@ def clean_df(df: pd.DataFrame, factor_list: list) -> pd.DataFrame:
     return df
 
 
-def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, logger=None) -> tuple[pd.DataFrame, pd.DataFrame]:
+def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, logger=None) -> tuple[
+    pd.DataFrame, pd.DataFrame]:
     """
     # Create cross-sectional groups for factor data
     Groups the df containing factor values, records group numbers, removes stocks that cannot be traded due to limit up/down,
@@ -566,7 +657,7 @@ def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, log
     """
     benchmark_pct = {}  # Store benchmark index daily returns {'date': ...}
     grouped_dfs = []  # For collecting processed groups
-    
+
     # Validate if group count is in valid range
     if group_cnt < 2 or group_cnt > 20:
         if logger:
@@ -574,15 +665,16 @@ def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, log
         else:
             print(f"Warning: Group count {group_cnt} is out of range (2-20), will use default value 10")
         group_cnt = 10
-        
+
     for date, group in df.groupby('date'):
         benchmark_pct_child = {}
-        benchmark_pct_child['1D_m'] = group['1day_return'].mean()  # Calculate average return of all stocks for next period
-        benchmark_pct_child['3D_m'] = group['5day_return'].mean()
+        benchmark_pct_child['1D_m'] = group[
+            '1day_return'].mean()  # Calculate average return of all stocks for next period
+        benchmark_pct_child['3D_m'] = group['3day_return'].mean()
         benchmark_pct_child['5D_m'] = group['5day_return'].mean()
-        benchmark_pct_child['10D_m'] = group['5day_return'].mean()
-        benchmark_pct_child['20D_m'] = group['5day_return'].mean()
-        benchmark_pct_child['30D_m'] = group['5day_return'].mean()
+        benchmark_pct_child['10D_m'] = group['10day_return'].mean()
+        benchmark_pct_child['20D_m'] = group['20day_return'].mean()
+        benchmark_pct_child['30D_m'] = group['30day_return'].mean()
         benchmark_pct[date] = benchmark_pct_child
 
         # Remove stocks that cannot be traded due to limit up/down
@@ -594,19 +686,22 @@ def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, log
         # Create a new column named '{factor_name}_group' containing grouping information
         new_group = group.copy()
 
-        if group[factor_name].dropna().nunique() < group_cnt:  # Check if the number of unique values after removing NaN is less than group_cnt
+        if group[
+            factor_name].dropna().nunique() < group_cnt:  # Check if the number of unique values after removing NaN is less than group_cnt
             if logger:
                 logger.warning(f"Factor {factor_name},{date},group count less than {group_cnt}, will skip")
             else:
                 print(f"Warning: Factor {factor_name},{date},group count less than {group_cnt}, will skip")
             continue
-        
+
         # Use qcut for grouping and ensure the number of groups is correct
         try:
+
             # Add a small random noise to ensure unique bin edges
             noise = np.random.normal(0, 1e-10, size=group[factor_name].dropna().shape)
             noisy_values = group[factor_name].dropna().values + noise
-            new_group[f'{factor_name}_group'] = pd.qcut(noisy_values, q=group_cnt, labels=range(1, group_cnt+1))
+            new_group[f'{factor_name}_group'] = pd.qcut(noisy_values, q=group_cnt, labels=range(1, group_cnt + 1))
+            # new_group[f'{factor_name}_group'] = pd.qcut(group[factor_name].dropna(), q=group_cnt, labels=range(1, group_cnt+1))
         except ValueError as e:
             if logger:
                 logger.error(f"{factor_name},{date},grouping failed: {str(e)}")
@@ -615,17 +710,94 @@ def grouping_factor(df: pd.DataFrame, factor_name: str, group_cnt: int = 10, log
             continue
 
         grouped_dfs.append(new_group)
-        
+
     # Merge all processed groups
     if grouped_dfs:
         df_cuted = pd.concat(grouped_dfs)
     else:
         df_cuted = pd.DataFrame()  # If there's no valid data, return an empty DataFrame
-        
+
     # Convert benchmark index returns to DataFrame
     df_benchmark = pd.DataFrame(benchmark_pct).T
 
     return df_cuted, df_benchmark
+
+
+def grouping_factor_list(df: pd.DataFrame, factor_list: list, group_cnt: int = 10, logger=None) -> tuple[
+    pd.DataFrame, pd.DataFrame]:
+    """
+    # Create cross-sectional groups for factor data
+    Groups the df containing factor values, records group numbers, removes stocks that cannot be traded due to limit up/down,
+    and simultaneously records the average market return for each day
+    :param df: Daily factor data DataFrame to be processed
+    :param factor_name: Factor name to be processed
+    :param group_cnt: Number of groups, default is 10, valid range 2-20
+    :param logger: Logger instance, default is None
+    :return: Returns a tuple (DataFrame with group numbers in a new column named '{factor_name}_group', DataFrame recording daily market average returns)
+    """
+    benchmark_pct = {}  # Store benchmark index daily returns {'date': ...}
+    grouped_dfs = []  # For collecting processed groups
+
+    # Validate if group count is in valid range
+    if group_cnt < 2 or group_cnt > 20:
+        if logger:
+            logger.warning(f"Group count {group_cnt} is out of range (2-20), will use default value 10")
+        else:
+            print(f"Warning: Group count {group_cnt} is out of range (2-20), will use default value 10")
+        group_cnt = 10
+
+    for date, group in df.groupby('date'):
+        benchmark_pct_child = {}
+        benchmark_pct_child['1D_m'] = group[
+            '1day_return'].mean()  # Calculate average return of all stocks for next period
+        benchmark_pct_child['3D_m'] = group['3day_return'].mean()
+        benchmark_pct_child['5D_m'] = group['5day_return'].mean()
+        benchmark_pct_child['10D_m'] = group['10day_return'].mean()
+        benchmark_pct_child['20D_m'] = group['20day_return'].mean()
+        benchmark_pct_child['30D_m'] = group['30day_return'].mean()
+        benchmark_pct[date] = benchmark_pct_child
+
+        # Remove stocks that cannot be traded due to limit up/down
+        group = group[group['unable_trade'] == 0]  # Remove untradable stocks (limit up/down)
+
+        if group.empty:  # Check if DataFrame is empty
+            continue
+
+        # Create a new column named '{factor_name}_group' containing grouping information
+        new_group = group.copy()
+        for f in factor_list:
+            new_group[f'{f}_group'] = np.nan
+        for f in factor_list:
+
+            if group[f].dropna().nunique() < group_cnt:  # 检查去掉NaN后的唯一值数量是否小于10
+                print(f"Factor {f},{date},group count less than {group_cnt}, will skip")
+                continue
+            try:
+                # 根据factor的值对group进行排序，并分为10个组
+                noise = np.random.normal(0, 1e-10, size=group[f].dropna().shape)
+                noisy_values = group[f].dropna().values + noise
+                new_group[f'{f}_group'] = pd.qcut(noisy_values, q=group_cnt, labels=range(1, group_cnt + 1))
+            except ValueError as e:
+                if logger:
+                    logger.error(f"{f},{date},grouping failed: {str(e)}")
+                else:
+                    print(f"Error: {f},{date},grouping failed: {str(e)}")
+                continue
+        # Use qcut for grouping and ensure the number of groups is correct
+
+        grouped_dfs.append(new_group)
+
+    # Merge all processed groups
+    if grouped_dfs:
+        df_cuted = pd.concat(grouped_dfs)
+    else:
+        df_cuted = pd.DataFrame()  # If there's no valid data, return an empty DataFrame
+
+    # Convert benchmark index returns to DataFrame
+    df_benchmark = pd.DataFrame(benchmark_pct).T
+
+    return df_cuted, df_benchmark
+
 
 def change_code(s):
     if s[-4:] == 'XSHE':
@@ -635,6 +807,7 @@ def change_code(s):
     else:
         print('Unknown code!')
         return 0
+
 
 if __name__ == '__main__':
     pass

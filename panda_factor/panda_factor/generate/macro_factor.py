@@ -10,10 +10,158 @@ from panda_common.logger_config import logger
 from datetime import datetime
 from panda_factor.generate.factor_utils import FactorUtils
 from panda_factor.generate.factor_wrapper import FactorDataWrapper, FactorSeries
+from panda_factor.generate.factor_constants import FactorConstants
+from panda_factor.generate.factor_error_handler import FactorErrorHandler
+from panda_factor.generate.factor_data_handler import FactorDataHandler
+from typing import Optional, List, Set, Dict, Any
+
 
 class MacroFactor:
     """Factor management class, responsible for factor creation and validation"""
-    
+
+    def _log_error_context(self, error, code, logger):
+        """Helper function to log detailed error context"""
+        import traceback
+        import types
+        import re
+
+        def extract_factor_code(code):
+            """Extract the factor calculation code from the class definition"""
+            # Find the calculate method
+            match = re.search(r'def\s+calculate\s*\([^)]*\):\s*\n', code)
+            if not match:
+                return None, 0
+
+            start_pos = match.end()
+            # Get the indentation of the first line after def calculate
+            lines = code[start_pos:].split('\n')
+
+            # Skip empty lines at the start
+            i = 0
+            while i < len(lines) and not lines[i].strip():
+                i += 1
+            if i >= len(lines):
+                return None, 0
+
+            first_line = lines[i]
+            base_indent = len(first_line) - len(first_line.lstrip())
+
+            # Extract the method body
+            method_lines = []
+            method_start_line = code[:start_pos].count('\n') + i + 1
+
+            for line in lines[i:]:
+                if not line.strip() or len(line) - len(line.lstrip()) >= base_indent:
+                    method_lines.append(line)
+                else:
+                    break
+
+            return '\n'.join(method_lines), method_start_line
+
+        def find_error_location(tb, code):
+            """Find the exact error location in the user's factor code"""
+            while tb:
+                frame = tb.tb_frame
+                if 'calculate' in frame.f_code.co_name:
+                    # Get the error line number in the frame
+                    error_line = tb.tb_lineno - frame.f_code.co_firstlineno
+
+                    # Extract the factor code
+                    factor_code, start_line = extract_factor_code(code)
+                    if factor_code:
+                        # Get the code lines
+                        code_lines = factor_code.split('\n')
+
+                        # Find the last non-empty line before the error
+                        actual_line = error_line
+                        while actual_line > 0 and not code_lines[actual_line - 1].strip():
+                            actual_line -= 1
+
+                        return actual_line, factor_code, code_lines[actual_line - 1].lstrip()
+                tb = tb.tb_next
+            return None, None, None
+
+        # Find error location
+        error_line, factor_code, error_content = find_error_location(error.__traceback__, code)
+
+        if error_line is None or factor_code is None:
+            logger.error("Could not locate error in factor code")
+            return
+
+        # Split factor code into lines
+        code_lines = factor_code.split('\n')
+
+        # Log detailed error information
+        logger.error("=" * 50)
+        logger.error(f"Error Type: {type(error).__name__}")
+        logger.error(f"Error Message: {str(error)}")
+        logger.error(f"Error occurred in calculate method at line {error_line}")
+        if error_content:
+            logger.error(f"Last executed line: {error_content}")
+
+        # Show code context
+        logger.error("\nCode context:")
+        context_start = max(0, error_line - 3)
+        context_end = min(len(code_lines), error_line + 2)
+
+        for i in range(context_start, context_end):
+            if i < len(code_lines):
+                prefix = ">>> " if i + 1 == error_line else "    "
+                # Remove common indentation for better readability
+                line = code_lines[i].lstrip()
+                if line.strip():  # Only show non-empty lines
+                    logger.error(f"{prefix}{i + 1:4d} | {line}")
+
+        logger.error("=" * 50)
+
+        # Add variable information
+        if isinstance(error, AttributeError):
+            logger.error("\nAttribute Error Details:")
+            try:
+                frame = None
+                tb = error.__traceback__
+                while tb:
+                    if 'calculate' in tb.tb_frame.f_code.co_name:
+                        frame = tb.tb_frame
+                        break
+                    tb = tb.tb_next
+
+                if frame:
+                    locals_dict = frame.f_locals
+                    if isinstance(locals_dict, dict):
+                        error_msg = str(error)
+                        if "has no attribute" in error_msg:
+                            attr_name = error_msg.split("'")[3]  # Extract attribute name
+                            for key, value in locals_dict.items():
+                                if key != '__traceback__':  # Skip traceback
+                                    logger.error(f"Variable '{key}' is of type: {type(value)}")
+                                    if isinstance(value, (int, float, str, bool)):
+                                        logger.error(f"Value: {value}")
+            except Exception as e:
+                logger.error(f"Could not determine object details: {str(e)}")
+
+        elif isinstance(error, TypeError):
+            logger.error("\nType Error Details:")
+            try:
+                frame = None
+                tb = error.__traceback__
+                while tb:
+                    if 'calculate' in tb.tb_frame.f_code.co_name:
+                        frame = tb.tb_frame
+                        break
+                    tb = tb.tb_next
+
+                if frame:
+                    frame_locals = frame.f_locals
+                    if isinstance(frame_locals, dict):
+                        for key, value in frame_locals.items():
+                            if isinstance(key, str) and not key.startswith('__'):
+                                logger.error(f"Variable '{key}' is of type: {type(value)}")
+                                if isinstance(value, (int, float, str, bool)):
+                                    logger.error(f"Value: {value}")
+            except Exception as e:
+                logger.error(f"Could not determine variable types: {str(e)}")
+
     # Factor name mapping
     FACTOR_MAP = {
         'price': 'close',
@@ -55,33 +203,33 @@ class MacroFactor:
         # Basic math functions
         'abs', 'round', 'min', 'max', 'sum', 'len',
         'sin', 'cos', 'tan', 'log', 'exp', 'sqrt',
-        
+
         # Basic calculation functions
         'RANK', 'RETURNS', 'STDDEV', 'CORRELATION', 'IF', 'MIN', 'MAX',
         'ABS', 'LOG', 'POWER', 'SIGN', 'SIGNEDPOWER', 'COVARIANCE',
-        
+
         # Time series functions
         'DELAY', 'SUM', 'TS_ARGMAX', 'TS_ARGMIN', 'TS_MEAN', 'TS_MIN',
         'TS_MAX', 'TS_RANK', 'DECAY_LINEAR', 'MA', 'EMA', 'SMA', 'DMA', 'WMA',
-        
+
         # Technical indicator functions
         'MACD', 'KDJ', 'RSI', 'BOLL', 'CCI', 'ATR', 'DMI', 'BBI', 'TAQ',
         'KTN', 'TRIX', 'VR', 'EMV', 'DPO', 'BRAR', 'MTM', 'MASS', 'ROC',
         'EXPMA', 'OBV', 'MFI', 'ASI', 'PSY', 'BIAS', 'WR',
-        
+
         # Price-related functions
-        'VWAP', 'CAP', 
-        
+        'VWAP', 'CAP',
+
         # Core utility functions
         'RD', 'RET', 'REF', 'DIFF', 'CONST', 'HHVBARS', 'LLVBARS', 'AVEDEV',
         'SLOPE', 'FORCAST', 'LAST', 'COUNT', 'EVERY', 'EXIST', 'FILTER',
         'SUMIF', 'BARSLAST', 'BARSLASTCOUNT', 'BARSSINCEN', 'CROSS',
         'LONGCROSS', 'VALUEWHEN',
-        
+
         # Average functions
         'MEAN'
     }
-    
+
     # Get all public methods from FactorUtils
     ALLOWED_BUILTINS.update(
         {name for name in dir(FactorUtils) if not name.startswith('_')}
@@ -139,225 +287,109 @@ class MacroFactor:
         'datetime', 'timedelta',
         'warnings',
         'Factor',  # 允许从基类导入
-        'talib',   # 技术分析库
-        'scipy',   # 科学计算
-        'sklearn', # 机器学习
+        'talib',  # 技术分析库
+        'scipy',  # 科学计算
+        'sklearn',  # 机器学习
         'statsmodels'  # 统计模型
     }
 
     def __init__(self):
         """Initialize factor calculator"""
         self.data_provider = PandaDataProvider()
-        self.base_factors = None  # Used to store base factor data
-        
+        self.data_handler = FactorDataHandler(self.data_provider)
+        self.base_factors = None
+
     def _is_safe_name(self, name: str) -> bool:
         """Check if variable name is safe"""
         # If it's a factor name, allow directly
-        if name in self.FACTOR_MAP:
+        if name in FactorConstants.FACTOR_MAP:
             return True
-            
+
         # First check if it's an explicitly disallowed module
-        if name in self.DISALLOWED_MODULES:
+        if name in FactorConstants.DISALLOWED_MODULES:
             print(f"Module access denied: {name}")
             return False
-            
-        return (name in self.ALLOWED_BUILTINS or 
-                name in self.ALLOWED_ATTRIBUTES or
-                name in self.ALLOWED_IMPORTS or  # 添加对允许导入模块的检查
-                name in {'np', 'pd'} or  # Allow numpy and pandas
-                not name.startswith('__'))  # Prevent access to special methods
 
-    def _is_safe_ast(self, node, allow_assign=True, error_info=None) -> bool:
-        """Check if AST node is safe
-        
-        Args:
-            node: AST node to check
-            allow_assign: Whether to allow assignment operations
-            error_info: List to collect error information
-        """
+        return (name in FactorConstants.ALLOWED_BUILTINS or
+                name in FactorConstants.ALLOWED_ATTRIBUTES or
+                name in FactorConstants.ALLOWED_IMPORTS or
+                name in {'np', 'pd'} or
+                not name.startswith('__'))
+
+    def _is_safe_ast(self, node: ast.AST, allow_assign: bool = True,
+                     error_info: Optional[List[Dict[str, Any]]] = None) -> bool:
+        """Relaxed AST safety check: only block truly dangerous operations, allow all others."""
         if error_info is None:
             error_info = []
-            
-        def add_error(node, reason):
-            """Helper function to add error information"""
+
+        # 危险模块和函数
+        DANGEROUS_MODULES = {
+            'os', 'subprocess', 'sys', 'shutil', 'pickle', 'shelve', 'marshal', 'importlib', 'pty', 'platform', 'popen',
+            'commands'
+        }
+        DANGEROUS_FUNCS = {
+            'eval', 'exec', 'open', 'compile', 'execfile', '__import__'
+        }
+
+        def add_error(node: ast.AST, reason: str) -> bool:
             try:
                 line_no = getattr(node, 'lineno', 'unknown')
                 col_offset = getattr(node, 'col_offset', 'unknown')
                 code_str = ast.unparse(node) if hasattr(ast, 'unparse') else str(node)
-                if isinstance(node, (ast.ListComp, ast.GeneratorExp, ast.Lambda)):
-                    error_info.append({
-                        'line': line_no,
-                        'column': col_offset,
-                        'type': type(node).__name__,
-                        'code': code_str,
-                        'reason': reason
-                    })
-                    return False
+                error_info.append({
+                    'line': line_no,
+                    'column': col_offset,
+                    'type': type(node).__name__,
+                    'code': code_str,
+                    'reason': reason
+                })
+                print(f"Safety check failed at line {line_no}: {reason}")
+                print(f"Code: {code_str}")
+                return False
             except Exception:
-                pass
-            return False
+                error_info.append({
+                    'line': 'unknown',
+                    'column': 'unknown',
+                    'type': type(node).__name__,
+                    'code': str(node),
+                    'reason': reason
+                })
+                print(f"Safety check failed: {reason}")
+                print(f"Node type: {type(node).__name__}")
+                return False
 
-        if isinstance(node, ast.Module):
-            return all(self._is_safe_ast(subnode, allow_assign, error_info) for subnode in node.body)
-
-        if isinstance(node, (ast.Num, ast.Str, ast.Bytes, ast.NameConstant, ast.Constant)):
-            return True
-
-        if isinstance(node, ast.Name):
-            if not self._is_safe_name(node.id):
-                return add_error(node, f"Unauthorized identifier: {node.id}")
-            return True
-
-        if isinstance(node, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
-                           ast.Pow, ast.Mod, ast.USub, ast.UAdd)):
-            return True
-
-        if isinstance(node, ast.ListComp):
-            return add_error(node, "List comprehensions are not allowed")
-
-        if isinstance(node, ast.GeneratorExp):
-            return add_error(node, "Generator expressions are not allowed")
-
-        if isinstance(node, ast.Lambda):
-            return add_error(node, "Lambda functions are not allowed")
-
+        # 禁止危险模块导入
         if isinstance(node, ast.Import):
-            # Check imports
             for name in node.names:
-                if name.name not in self.ALLOWED_IMPORTS:
-                    return add_error(node, f"Unauthorized import: {name.name}")
+                if name.name.split(".")[0] in DANGEROUS_MODULES:
+                    return add_error(node, f"Import dangerous module: {name.name}")
             return True
-
         if isinstance(node, ast.ImportFrom):
-            # Check from-import statements
-            if node.module in self.DISALLOWED_MODULES:
-                return add_error(node, f"Import from disallowed module: {node.module}")
-            if node.module not in self.ALLOWED_IMPORTS and not any(
-                prefix and node.module.startswith(prefix) for prefix in self.ALLOWED_IMPORTS
-            ):
-                return add_error(node, f"Unauthorized module import: {node.module}")
+            if node.module and node.module.split(".")[0] in DANGEROUS_MODULES:
+                return add_error(node, f"Import from dangerous module: {node.module}")
             return True
-
+        # 禁止危险模块属性访问
         if isinstance(node, ast.Attribute):
             if isinstance(node.value, ast.Name):
-                module = node.value.id
-                if module in self.DISALLOWED_MODULES:
-                    return add_error(node, f"Access to disallowed module: {module}")
-                if module in ['np', 'pd']:
-                    if node.attr in self.ALLOWED_ATTRIBUTES[module]:
-                        return True
-                    if not node.attr.startswith('_'):
-                        return True
-                    return add_error(node, f"Access to private {module} attribute: {node.attr}")
-                if module in self.ALLOWED_ATTRIBUTES:
-                    if node.attr not in self.ALLOWED_ATTRIBUTES[module]:
-                        return add_error(node, f"Unauthorized attribute access: {module}.{node.attr}")
-                    return True
-                return add_error(node, f"Unauthorized module access: {module}.{node.attr}")
-            return self._is_safe_ast(node.value, allow_assign=False)
-
+                if node.value.id in DANGEROUS_MODULES:
+                    return add_error(node, f"Access dangerous module: {node.value.id}")
+            return True
+        # 禁止危险函数调用
         if isinstance(node, ast.Call):
+            # 直接函数名
             if isinstance(node.func, ast.Name):
-                if node.func.id not in self.ALLOWED_BUILTINS:
-                    if node.func.id in ['np', 'pd']:
-                        return all(self._is_safe_ast(arg, allow_assign=False) for arg in node.args)
-                    return add_error(node, f"Unauthorized function call: {node.func.id}")
-                return all(self._is_safe_ast(arg, allow_assign=False) for arg in node.args)
+                if node.func.id in DANGEROUS_FUNCS:
+                    return add_error(node, f"Call dangerous function: {node.func.id}")
+            # 模块.函数
             if isinstance(node.func, ast.Attribute):
-                if not self._is_safe_ast(node.func, allow_assign=False):
-                    return False
-                return all(self._is_safe_ast(arg, allow_assign=False) for arg in node.args)
-            return add_error(node, "Unsupported call type")
+                if isinstance(node.func.value, ast.Name):
+                    if node.func.value.id in DANGEROUS_MODULES:
+                        return add_error(node, f"Call dangerous module function: {node.func.value.id}.{node.func.attr}")
+            return True
+        # 其他节点一律允许
+        return True
 
-        if isinstance(node, ast.Expr):
-            return self._is_safe_ast(node.value, allow_assign=False)
-            
-        if isinstance(node, ast.BinOp):
-            return (self._is_safe_ast(node.left, allow_assign=False) and 
-                   isinstance(node.op, (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv,
-                                     ast.Pow, ast.Mod)) and
-                   self._is_safe_ast(node.right, allow_assign=False))
-                   
-        if isinstance(node, ast.UnaryOp):
-            return (isinstance(node.op, (ast.UAdd, ast.USub)) and 
-                   self._is_safe_ast(node.operand, allow_assign=False))
-                   
-        if isinstance(node, ast.Compare):
-            return (all(self._is_safe_ast(comp, allow_assign=False) for comp in node.comparators) and 
-                   self._is_safe_ast(node.left, allow_assign=False))
-
-        if isinstance(node, (ast.List, ast.Tuple)):
-            return all(self._is_safe_ast(elt, allow_assign=False) for elt in node.elts)
-        
-        if isinstance(node, ast.Dict):
-            return (all(self._is_safe_ast(k, allow_assign=False) for k in node.keys if k is not None) and
-                   all(self._is_safe_ast(v, allow_assign=False) for v in node.values))
-
-        if isinstance(node, ast.Assign) and allow_assign:
-            return (all(isinstance(target, ast.Name) and self._is_safe_name(target.id) 
-                       for target in node.targets) and 
-                   self._is_safe_ast(node.value, allow_assign=False))
-
-        if isinstance(node, ast.If):
-            return (self._is_safe_ast(node.test, allow_assign=False) and
-                   all(self._is_safe_ast(bodynode, allow_assign) for bodynode in node.body) and
-                   all(self._is_safe_ast(elsenode, allow_assign) for elsenode in node.orelse))
-                   
-        if isinstance(node, ast.ClassDef):
-            # Check class definition
-            if not all(self._is_safe_ast(base) for base in node.bases):
-                return add_error(node, f"Unsafe base classes in class {node.name}")
-            if node.decorator_list and not all(self._is_safe_ast(dec) for dec in node.decorator_list):
-                return add_error(node, f"Unsafe decorators in class {node.name}")
-            return all(self._is_safe_ast(stmt) for stmt in node.body)
-            
-        if isinstance(node, ast.FunctionDef):
-            if node.decorator_list and not all(self._is_safe_ast(dec) for dec in node.decorator_list):
-                return add_error(node, f"Unsafe decorators in function {node.name}")
-            if node.args.defaults and not all(self._is_safe_ast(default) for default in node.args.defaults):
-                return add_error(node, f"Unsafe default arguments in function {node.name}")
-            return all(self._is_safe_ast(stmt) for stmt in node.body)
-            
-        if isinstance(node, ast.Subscript):
-            if not self._is_safe_ast(node.value, allow_assign=False):
-                return False
-            if isinstance(node.slice, ast.Constant):
-                return True
-            elif isinstance(node.slice, ast.Name):
-                return self._is_safe_name(node.slice.id)
-            elif isinstance(node.slice, ast.Slice):
-                return (
-                    (node.slice.lower is None or self._is_safe_ast(node.slice.lower, allow_assign=False)) and
-                    (node.slice.upper is None or self._is_safe_ast(node.slice.upper, allow_assign=False)) and
-                    (node.slice.step is None or self._is_safe_ast(node.slice.step, allow_assign=False))
-                )
-            else:
-                return self._is_safe_ast(node.slice, allow_assign=False)
-                
-        if isinstance(node, ast.Return):
-            if node.value is None:
-                return True
-            return self._is_safe_ast(node.value, allow_assign=False)
-
-        return True  # 对于其他类型的节点，默认允许
-
-    def _validate_formula(self, formula: str) -> bool:
-        """Validate formula safety"""
-        try:
-            if not isinstance(formula, str):
-                print(f"Formula must be string type, got {type(formula)}")
-                return False
-            
-            tree = ast.parse(formula)
-            return all(self._is_safe_ast(node) for node in tree.body)
-        except SyntaxError as e:
-            print(f"Formula syntax error: {e}")
-            return False
-        except Exception as e:
-            print(f"Formula validation error: {e}")
-            return False
-
-    def _extract_factor_names(self, formula: str) -> set:
+    def _extract_factor_names(self, formula: str) -> Set[str]:
         """Extract required factor names from formula"""
         try:
             if not isinstance(formula, str):
@@ -366,156 +398,89 @@ class MacroFactor:
 
             pattern = r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b'
             variables = set(re.findall(pattern, formula))
-            
+
             # Remove all built-in functions and attribute names
-            variables = variables - self.ALLOWED_BUILTINS - set(self.ALLOWED_ATTRIBUTES.keys())
-            
+            variables = variables - FactorConstants.ALLOWED_BUILTINS - set(FactorConstants.ALLOWED_ATTRIBUTES.keys())
+
             factor_names = set()
             for var in variables:
-                if var.upper() in self.FACTOR_MAP:
-                    factor_names.add(self.FACTOR_MAP[var.upper()])
-                elif var.lower() in self.FACTOR_MAP:
-                    factor_names.add(self.FACTOR_MAP[var.lower()])
-                elif var in self.FACTOR_MAP:
-                    factor_names.add(self.FACTOR_MAP[var])
-            
+                if var.upper() in FactorConstants.FACTOR_MAP:
+                    factor_names.add(FactorConstants.FACTOR_MAP[var.upper()])
+                elif var.lower() in FactorConstants.FACTOR_MAP:
+                    factor_names.add(FactorConstants.FACTOR_MAP[var.lower()])
+                elif var in FactorConstants.FACTOR_MAP:
+                    factor_names.add(FactorConstants.FACTOR_MAP[var])
+
             if not factor_names:
                 print(f"No valid factors found in formula. Variables found: {variables}")
             else:
                 print(f"Required factors found: {factor_names}")
-            
+
             return factor_names
-        
+
         except Exception as e:
             print(f"Error extracting factor names: {e}")
             return set()
 
-    def get_base_factors(self, required_factors, start_date: str, end_date: str, symbols: list = None):
-        """Get base factor data"""
-        if not required_factors:
-            return None
-        
-        factor_data = {}
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        import time
-
-        def fetch_factor(factor_name, start_date, end_date, symbols, data_provider):
-            try:
-                logger.info(f"Starting to get factor {factor_name}...")
-                start_time = time.time()
-            
-                data = data_provider.get_factor_data(factor_name, start_date, end_date, symbols)
-                if data is None:
-                    logger.error(f"Factor retrieval failed: {factor_name}")
-                    return None, factor_name
-                    
-                # Drop any duplicate date columns before setting index
-                data = data.loc[:, ~data.columns.duplicated()]
-                data = data.set_index(['date', 'symbol'])
-                data = data[~data.index.duplicated(keep='first')]
-                    
-                logger.info(f"Successfully retrieved factor {factor_name}, took {time.time() - start_time:.2f} seconds")
-                return pd.Series(data[factor_name]), factor_name
-            except Exception as e:
-                logger.error(f"Error retrieving factor {factor_name}: {str(e)}")
-                return None, factor_name
-
-        logger.info(f"Starting parallel factor data retrieval, {len(required_factors)} factors in total")
-        start_time = time.time()
-
-        with ThreadPoolExecutor(max_workers=min(len(required_factors), 10)) as executor:
-            future_to_factor = {
-                executor.submit(
-                    fetch_factor,
-                    factor_name,
-                    start_date,
-                    end_date, 
-                    symbols,
-                    self.data_provider
-                ): factor_name for factor_name in required_factors
-            }
-
-            for future in as_completed(future_to_factor):
-                factor_name = future_to_factor[future]
-                try:
-                    factor_data_result, _ = future.result()
-                    if factor_data_result is None:
-                        logger.error(f"Factor {factor_name} retrieval failed")
-                        return None
-                    factor_data[factor_name] = factor_data_result
-                    logger.info(f"Factor {factor_name} loaded into memory")
-                except Exception as e:
-                    logger.error(f"Error processing factor {factor_name}: {str(e)}")
-                    return None
-
-        logger.info(f"All factor data retrieval completed, total time taken {time.time() - start_time:.2f} seconds")
-        return factor_data
-
-    def create_factor_from_formula(self, factor_logger, formula: str, start_date: str, end_date: str, symbols: list = None):
+    def create_factor_from_formula(self, factor_logger: Any, formula: str, start_date: str,
+                                   end_date: str, symbols: Optional[List[str]] = None,
+                                   index_component: Optional[str] = None) -> Optional[pd.DataFrame]:
         """Create factor from formula"""
         print("\n=== Starting formula execution ===")
         print(f"Formula: {formula}")
-        
+
         # Validate formula
         if not isinstance(formula, str):
             raise ValueError("Formula must be string type")
-        
+
         # Extract required factor names
         required_factors = self._extract_factor_names(formula)
         print(f"Required factors found: {required_factors}")
-        
-        # Get extended start date
+
+        # Get extended start date for lookback
         start_date_dt = pd.to_datetime(start_date)
         extended_start_date = (start_date_dt - pd.DateOffset(months=3)).strftime('%Y-%m-%d')
-        
+
         # Create context
         context = {}
-        
+
         # Get base factor data
-        self.base_factors = self.get_base_factors(required_factors, extended_start_date, end_date, symbols)
+        self.base_factors = self.data_handler.get_base_factors_pro(required_factors, extended_start_date, end_date,
+                                                                   symbols)
         if self.base_factors is None or any(v is None for v in self.base_factors.values()):
             raise ValueError("Missing required base factors")
-        
+
         # Add base factors to context
         for name, data in self.base_factors.items():
             context[name] = data
-            context[name.upper()] = data  # Add uppercase version
+            context[name.upper()] = data
             print(f"Adding factor to context: {name} and {name.upper()}")
-        
+
         # Add all FactorUtils methods to context
         for method_name in dir(FactorUtils):
-            if not method_name.startswith('_'):  # Skip private methods
+            if not method_name.startswith('_'):
                 method = getattr(FactorUtils, method_name)
                 context[method_name] = method
-                context[method_name.upper()] = method  # Add uppercase version
-                print(f"Adding function to context: {method_name} and {method_name.upper()}")
-        
+                context[method_name.upper()] = method
+                # print(f"Adding function to context: {method_name} and {method_name.upper()}")
+
         # Add math functions to context
         math_funcs = {
-            'LOG': np.log,
-            'EXP': np.exp,
-            'SQRT': np.sqrt,
-            'ABS': np.abs,
-            'SIN': np.sin,
-            'COS': np.cos,
-            'TAN': np.tan,
-            'POWER': np.power,
-            'SIGN': np.sign,
-            'MAX': np.maximum,
-            'MIN': np.minimum,
-            'MEAN': np.mean,
-            'STD': np.std
+            'LOG': np.log, 'EXP': np.exp, 'SQRT': np.sqrt, 'ABS': np.abs,
+            'SIN': np.sin, 'COS': np.cos, 'TAN': np.tan, 'POWER': np.power,
+            'SIGN': np.sign, 'MAX': np.maximum, 'MIN': np.minimum,
+            'MEAN': np.mean, 'STD': np.std
         }
         context.update(math_funcs)
-        
+
         # Add numpy and pandas to context
         context['np'] = np
         context['pd'] = pd
-        
+
         # Prepare result expression
         result_expr = formula.upper()
         print(f"Result expression: {result_expr}")
-        
+
         # Execute formula
         print("Executing result expression")
         try:
@@ -528,182 +493,179 @@ class MacroFactor:
                 if callable(context[key]):
                     print(f"- {key}")
             raise
-        
-        # Ensure result is pandas Series
-        if not isinstance(result, pd.Series):
-            print("Converting result to pandas Series")
-            result = pd.Series(result)
-        
-        # Ensure result has correct index
-        if not isinstance(result.index, pd.MultiIndex):
-            print("Converting result index to MultiIndex")
-            result = pd.Series(result, index=pd.MultiIndex.from_tuples(
-                [(d, s) for d, s in zip(result.index, result.index)],
-                names=['date', 'symbol']
-            ))
-        
-        # Ensure index names are correct
-        if result.index.names != ['date', 'symbol']:
-            print("Setting correct index names")
-            result.index.names = ['date', 'symbol']
-        
-        # Ensure index is unique
-        result = result[~result.index.duplicated(keep='first')]
-        
-        print("Formula execution completed")
-        return result.to_frame(name='value')
 
-    def _format_error_stack(self, error: Exception, code: str) -> str:
-        """Format error stack information, focusing on user code error location
-        
+        return self.data_handler.process_result(result, start_date)
+
+    def create_factor_from_formula_pro(self, factor_logger: Any, formulas: List[str], start_date: str,
+                                       end_date: str, symbols: Optional[List[str]] = None,
+                                       index_component: Optional[str] = None) -> Optional[pd.DataFrame]:
+        """Create multiple factors from formulas in a single operation.
+
         Args:
-            error: Exception caught
-            code: User's original code
-            
-        Returns:
-            Formatted error information
-        """
-        import traceback
-        import re
-        
-        # Split user code into lines for easier subsequent display
-        code_lines = [line.rstrip() for line in code.split('\n')]
-        
-        # Build error information
-        error_msg = [f"Error type: {type(error).__name__}"]
-        error_msg.append(f"Error message: {str(error)}")
-        
-        # Try to extract line number from error message
-        line_no = None
-        
-        # Get full stack trace information
-        tb_list = traceback.extract_tb(error.__traceback__)
-        
-        # Find user code error location
-        for frame in reversed(tb_list):  # Search from last frame
-            # Check if it's user code frame
-            if frame.filename in ['<string>', '<unknown>']:
-                # Get actual code line content
-                code_line = frame.line if frame.line else ""
-                if not code_line.strip():
-                    continue
-                    
-                # Search for this line in code
-                for i, line in enumerate(code_lines, 1):
-                    if line.strip() and code_line.strip() in line.strip():
-                        line_no = i
-                        break
-                if line_no:  # If line number found, stop searching
-                    break
-        
-        # If stack trace doesn't find line number, try to extract from error message
-        if line_no is None:
-            error_str = str(error)
-            # Try to match "line X" pattern
-            line_match = re.search(r'line (\d+)', error_str)
-            if line_match:
-                line_no = int(line_match.group(1))
-                
-            # If NameError, try to find undefined variable name in code
-            if isinstance(error, NameError):
-                var_match = re.search(r"name '(.+)' is not defined", str(error))
-                if var_match:
-                    var_name = var_match.group(1)
-                    for i, line in enumerate(code_lines, 1):
-                        if var_name in line:
-                            line_no = i
-                            break
-        
-        if line_no is not None:
-            # Adjust line number to match user code
-            # Skip leading empty lines
-            while line_no > 1 and not code_lines[line_no - 1].strip():
-                line_no -= 1
-                
-            error_msg.append("\nCode location:")
-            
-            # Display code around error line (context)
-            start_line = max(0, line_no - 2)  # Display 2 lines before error line
-            end_line = min(len(code_lines), line_no + 3)  # Display 2 lines after error line
-            
-            for i in range(start_line, end_line):
-                if i < len(code_lines):
-                    # Use >>> to mark error line, indent other lines
-                    prefix = '>>> ' if i + 1 == line_no else '    '
-                    # Display line number and code content
-                    error_msg.append(f"{prefix}{i + 1:2d} | {code_lines[i]}")
-        else:
-            # If no specific line number found, display related code context
-            error_msg.append("\nUnable to determine specific error line, displaying related code:")
-            for i, line in enumerate(code_lines, 1):
-                if line.strip():  # Display only non-empty lines
-                    error_msg.append(f"    {i:2d} | {line}")
-        
-        return '\n'.join(error_msg)
+            factor_logger: Logger instance
+            formulas: List of formula strings to evaluate
+            start_date: Start date for factor calculation
+            end_date: End date for factor calculation
+            symbols: Optional list of symbols to filter by
 
-    def create_factor_from_class(self, factor_logger, class_code: str, start_date: str, end_date: str, symbols: list = None):
+        Returns:
+            DataFrame with columns named factor1, factor2, etc., or None if calculation fails
+        """
+        print("\n=== Starting multi-formula execution ===")
+        print(f"Number of formulas: {len(formulas)}")
+
+        # Validate input
+        if not isinstance(formulas, list) or not all(isinstance(f, str) for f in formulas):
+            raise ValueError("Formulas must be a list of strings")
+
+        if not formulas:
+            raise ValueError("Empty formulas list provided")
+
+        # Extract required factor names from all formulas
+        required_factors = set()
+        for i, formula in enumerate(formulas):
+            formula_factors = self._extract_factor_names(formula)
+            required_factors.update(formula_factors)
+            print(f"Formula {i + 1} requires factors: {formula_factors}")
+
+        print(f"Total required factors: {required_factors}")
+
+        # Get extended start date for lookback
+        start_date_dt = pd.to_datetime(start_date)
+        extended_start_date = (start_date_dt - pd.DateOffset(months=3)).strftime('%Y-%m-%d')
+
+        # Create context
+        context = {}
+
+        # Get all base factor data at once
+        self.base_factors = self.data_handler.get_base_factors_pro(required_factors, extended_start_date, end_date,
+                                                                   symbols)
+        if self.base_factors is None or any(v is None for v in self.base_factors.values()):
+            raise ValueError("Missing required base factors")
+
+        # Add base factors to context
+        for name, data in self.base_factors.items():
+            context[name] = data
+            context[name.upper()] = data
+            print(f"Adding factor to context: {name} and {name.upper()}")
+
+        # Add all FactorUtils methods to context
+        for method_name in dir(FactorUtils):
+            if not method_name.startswith('_'):
+                method = getattr(FactorUtils, method_name)
+                context[method_name] = method
+                context[method_name.upper()] = method
+                # print(f"Adding function to context: {method_name} and {method_name.upper()}")
+
+        # Add math functions to context
+        math_funcs = {
+            'LOG': np.log, 'EXP': np.exp, 'SQRT': np.sqrt, 'ABS': np.abs,
+            'SIN': np.sin, 'COS': np.cos, 'TAN': np.tan, 'POWER': np.power,
+            'SIGN': np.sign, 'MAX': np.maximum, 'MIN': np.minimum,
+            'MEAN': np.mean, 'STD': np.std
+        }
+        context.update(math_funcs)
+
+        # Add numpy and pandas to context
+        context['np'] = np
+        context['pd'] = pd
+
+        # Execute each formula and collect results
+        results = {}
+        for i, formula in enumerate(formulas):
+            factor_name = f"factor{i + 1}"
+            print(f"Executing formula {i + 1}: {formula}")
+
+            # Prepare result expression (convert to uppercase for consistency)
+            result_expr = formula.upper()
+
+            try:
+                # Evaluate the formula
+                result = eval(result_expr, context)
+                print(f"Result type for {factor_name}: {type(result)}")
+
+                # Store the result
+                results[factor_name] = result
+
+            except Exception as e:
+                print(f"Formula {i + 1} execution error: {str(e)}")
+                print("Functions available in context:")
+                for key in sorted(context.keys()):
+                    if callable(context[key]):
+                        print(f"- {key}")
+                raise ValueError(f"Error in formula {i + 1}: {str(e)}")
+
+        # Create a combined DataFrame from all results
+        try:
+            # Create a DataFrame with all factors
+            result_df = pd.DataFrame()
+
+            # Process and add each factor
+            for factor_name, result in results.items():
+                # Process the result using the existing method
+                processed_result = self.data_handler.process_result(result, start_date)
+
+                if processed_result is not None:
+                    # Rename the column to the factor name
+                    processed_result.columns = [factor_name]
+
+                    # If result_df is empty, initialize it
+                    if result_df.empty:
+                        result_df = processed_result
+                    else:
+                        # Join the result with the existing DataFrame
+                        result_df = result_df.join(processed_result, how='outer')
+
+            return result_df
+
+        except Exception as e:
+            print(f"Error combining results: {str(e)}")
+            raise
+
+    def create_factor_from_class(self, factor_logger: Any, class_code: str, start_date: str,
+                                 end_date: str, symbols: Optional[List[str]] = None,
+                                 index_component: Optional[str] = None) -> Optional[pd.DataFrame]:
         """Create factor from class"""
         from .factor_loader import FactorLoader
-        import traceback
-        
+
         # Parse code and check safety
         try:
             tree = ast.parse(class_code)
             unsafe_operations = []
-            
+            error_details = []
+
             # Check all top-level nodes
             for node in tree.body:
-                if not self._is_safe_ast(node):
-                    if isinstance(node, ast.Import):
-                        unsafe_operations.append(f"Unsafe import: {', '.join(name.name for name in node.names)}")
-                    elif isinstance(node, ast.ImportFrom):
-                        unsafe_operations.append(f"Unsafe import: {node.module}")
-                    elif isinstance(node, ast.ClassDef):
-                        unsafe_operations.append(f"Unsafe operation in class {node.name}")
-                    else:
-                        unsafe_operations.append(f"Unsafe operation: {type(node).__name__}")
-            
-            # Additional check for imports and system calls
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for name in node.names:
-                        if name.name in self.DISALLOWED_MODULES:
-                            unsafe_operations.append(f"Found disallowed import: {name.name}")
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module in self.DISALLOWED_MODULES:
-                        unsafe_operations.append(f"Found disallowed import: {node.module}")
-                # Check dangerous system calls
-                elif isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Attribute):
-                        if node.func.attr in ['system', 'popen', 'exec', 'eval', 'execfile', 'compile']:
-                            unsafe_operations.append(f"Found dangerous system call: {node.func.attr}")
-            
+                if not self._is_safe_ast(node, error_info=error_details):
+                    unsafe_operations.append(f"Unsafe operation: {type(node).__name__}")
+
             if unsafe_operations:
-                for op in unsafe_operations:
-                    factor_logger.warning(op)
-                factor_logger.error("Code safety check failed, contains unsafe operations")
+                factor_logger.error("=== Code Safety Check Failed ===")
+                factor_logger.error("Detailed error report:")
+                for detail in error_details:
+                    factor_logger.error(f"Line {detail['line']}, Column {detail['column']}:")
+                    factor_logger.error(f"Code: {detail['code']}")
+                    factor_logger.error(f"Reason: {detail['reason']}")
+                    factor_logger.error("-" * 50)
                 return None
-                
-            # factor_logger.info("Code safety check passed")
+
+            factor_logger.info("Code safety check passed")
         except SyntaxError as e:
             factor_logger.error(f"Code syntax error: {e}")
             factor_logger.error(f"Error location: Line {e.lineno}, Column {e.offset}")
             factor_logger.error(f"Error code: {e.text}")
-            factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
+            factor_logger.error(f"Error stack:\n{FactorErrorHandler.format_error_stack(e, class_code)}")
             return None
         except Exception as e:
             factor_logger.error(f"Code parsing error: {str(e)}")
-            factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
+            factor_logger.error(f"Error stack:\n{FactorErrorHandler.format_error_stack(e, class_code)}")
             return None
-        
-        # Load factor class
+
         try:
+            # Load factor class
             factor_class = FactorLoader.load_factor_class(class_code, common_imports="""
 import numpy as np
 import pandas as pd
-# import talib
-# from scipy import stats
-# from sklearn import preprocessing
 import math
 from datetime import datetime, timedelta
 import warnings
@@ -712,161 +674,64 @@ warnings.filterwarnings('ignore')
             if factor_class is None:
                 factor_logger.error("Factor class load failed")
                 return None
-                
+
             # Create factor instance
             factor = factor_class()
             factor.set_factor_logger(factor_logger)
-            
-            # Add custom print function to instance namespace
-            def custom_print(*args, **kwargs):
-                current_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                print(f"[{current_date}]", *args, **kwargs)
-            factor.print = custom_print
-            
+            factor.print = FactorErrorHandler.create_custom_print(factor_logger)
+
         except Exception as e:
             factor_logger.error(f"Factor class initialization failed: {str(e)}")
-            factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
+            factor_logger.error(f"Error stack:\n{FactorErrorHandler.format_error_stack(e, class_code)}")
             return None
-        
+
         try:
             # Extract required factors
             required_factors = set()
-            
+
             # Find all dictionary subscript operations
             for node in ast.walk(tree):
-                if (isinstance(node, ast.Subscript) and 
-                    isinstance(node.value, ast.Name) and 
-                    node.value.id == 'factors' and
-                    isinstance(node.slice, ast.Constant)):
+                if (isinstance(node, ast.Subscript) and
+                        isinstance(node.value, ast.Name) and
+                        node.value.id == 'factors' and
+                        isinstance(node.slice, ast.Constant)):
                     required_factors.add(node.slice.value)
-            
+
             if not required_factors:
                 factor_logger.error("No factor requirements found in code")
                 return None
-            
+            # Convert required factors to lowercase
+            required_factors = {factor.lower() for factor in required_factors}
             # Get extended start date
             start_date_dt = pd.to_datetime(start_date)
             extended_start_date = (start_date_dt - pd.DateOffset(months=3)).strftime('%Y-%m-%d')
-            
+
             # Get required factors
-            factors = {}
-            from concurrent.futures import ThreadPoolExecutor, as_completed
+            factors = self.data_handler.get_base_factors_pro(required_factors, extended_start_date, end_date, symbols,
+                                                             index_component)
+            if factors is None:
+                return None
 
-            def fetch_factor(factor_name, extended_start_date, end_date, symbols, data_provider):
-                try:
-                    data = data_provider.get_factor_data(factor_name, extended_start_date, end_date, symbols)
-                    if data is None:
-                        factor_logger.error(f"Factor retrieval failed: {factor_name}")
-                        return None, factor_name
-                    # Remove duplicate columns
-                    data = data.loc[:, ~data.columns.duplicated()]
-                    data = data.set_index(['date', 'symbol'])
-                    data = data[~data.index.duplicated(keep='first')]
-                    data = data.sort_index(level='date')
-                    return data[factor_name], factor_name
-                except Exception as e:
-                    factor_logger.error(f"Error retrieving factor {factor_name}: {str(e)}")
-                    factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
-                    return None, factor_name
-
-            with ThreadPoolExecutor(max_workers=min(len(required_factors), 10)) as executor:
-                future_to_factor = {
-                    executor.submit(
-                        fetch_factor, 
-                        factor_name, 
-                        extended_start_date, 
-                        end_date, 
-                        symbols,
-                        self.data_provider
-                    ): factor_name for factor_name in required_factors
-                }
-
-                for future in as_completed(future_to_factor):
-                    factor_data, factor_name = future.result()
-                    if factor_data is None:
-                        return None
-                    factors[factor_name] = factor_data
-            
             # Use wrapper class to wrap factor data
             wrapped_factors = FactorDataWrapper(factors)
-            
-            # Calculate factor value
+
+            # 自动全局替换print为logger.info
+            import builtins
+            old_print = builtins.print
+            builtins.print = FactorErrorHandler.create_custom_print(factor_logger)
             try:
+                # Calculate factor value
                 result = factor.calculate(wrapped_factors)
-            except Exception as e:
-                factor_logger.error(f"Factor calculation failed: {str(e)}")
-                factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
-                return None
-            
-            # Verify result
-            if not isinstance(result, pd.Series):
-                factor_logger.info("Converting result to pandas Series")
-                if isinstance(result, FactorSeries):
-                    # If FactorSeries, directly get its series attribute
-                    result = result.series
-                elif isinstance(result, pd.DataFrame):
-                    # If DataFrame, convert to Series
-                    result = result.iloc[:,0]
-                else:
-                    # Other types, try to convert to Series and set correct index
-                    try:
-                        result = pd.Series(result)
-                        result.index = pd.MultiIndex.from_tuples(
-                            [(d, s) for d, s in zip(result.index, result.index)],
-                            names=['date', 'symbol']
-                        )
-                    except Exception as e:
-                        factor_logger.error(f"Result conversion failed: {str(e)}")
-                        factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
-                        return None
-                
-            # Ensure result is sorted by date
-            result = result.sort_index(level='date')
-            
-            # Filter out dates before start_date
-            result = result[result.index.get_level_values('date') >= start_date]
-            
-            # Ensure result is Series type
-            if not isinstance(result, pd.Series):
-                result = pd.Series(result)
-            
-            # Ensure result has correct index
-            if not isinstance(result.index, pd.MultiIndex):
-                factor_logger.info("Converting result index to MultiIndex")
-                result = pd.Series(result, index=pd.MultiIndex.from_tuples(
-                    [(d, s) for d, s in zip(result.index, result.index)],
-                    names=['date', 'symbol']
-                ))
-            elif result.index.nlevels == 2 and result.index.names != ['date', 'symbol']:
-                factor_logger.info("Setting correct index names")
-                result.index.names = ['date', 'symbol']
-            elif result.index.nlevels == 3:
-                factor_logger.info("Fixing three-level index issue")
-                # Get unique date and stock codes
-                dates = result.index.get_level_values(1).unique()
-                symbols = result.index.get_level_values(2).unique()
-                
-                # Create new secondary index
-                new_index = pd.MultiIndex.from_product(
-                    [dates, symbols],
-                    names=['date', 'symbol']
-                )
-                
-                # Reindex data
-                result = result.reset_index(level=0, drop=True)  # Delete first level index
-                result = result.reindex(new_index)
-            
-            # Ensure index is unique
-            result = result[~result.index.duplicated(keep='first')]
-            
-            return result.to_frame(name='value')
-            
+            finally:
+                builtins.print = old_print  # 恢复原print
+            return self.data_handler.process_result(result, start_date)
+
         except Exception as e:
             factor_logger.error(f"Error occurred during factor processing: {str(e)}")
-            factor_logger.error(f"Error stack:\n{self._format_error_stack(e, class_code)}")
+            factor_logger.error(f"Error stack:\n{FactorErrorHandler.format_error_stack(e, class_code)}")
             return None
-    
-    def validate_factor(self, code: str, code_type: str = 'formula', timeout: int = 5) -> dict:
+
+    def validate_factor(self, code: str, code_type: str = 'formula', timeout: int = 5) -> Dict[str, Any]:
         """Validate factor code"""
         result = {
             'is_valid': True,
@@ -876,7 +741,7 @@ warnings.filterwarnings('ignore')
             'unsafe_operations': [],
             'timeout': False
         }
-        
+
         try:
             # Parse code
             try:
@@ -885,12 +750,12 @@ warnings.filterwarnings('ignore')
                 result['is_valid'] = False
                 result['syntax_errors'].append(f"Syntax error at line {e.lineno}: {e.msg}")
                 return result
-            
+
             # Check for unsafe operations
             error_info = []
             for node in ast.walk(tree):
                 self._is_safe_ast(node, error_info=error_info)
-            
+
             # Only collect important unsafe operations
             if error_info:
                 result['is_valid'] = False
@@ -899,11 +764,9 @@ warnings.filterwarnings('ignore')
                         f"Line {err['line']}: {err['type']} is not allowed - {err['reason']}"
                     )
                 return result
-            
-            # Continue with other validations...
-            
+
         except Exception as e:
             result['is_valid'] = False
             result['syntax_errors'].append(f"Validation error: {str(e)}")
-            
+
         return result
