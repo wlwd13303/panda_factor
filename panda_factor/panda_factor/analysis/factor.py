@@ -994,6 +994,7 @@ class factor():
                 result = None
 
                 collection = _db_handler.get_mongo_collection("panda", "factor_analysis_results")
+                # TODO 线下课程
                 result = collection.update_one(
                     {"factor_id": factor_id},
                     {"$set": document},
