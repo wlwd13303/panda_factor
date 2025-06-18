@@ -1,7 +1,10 @@
 import pymongo
 import urllib.parse
 import os
-
+import logging
+from typing import Optional, Dict, List
+# 设置日志
+logger = logging.getLogger(__name__)
 class DatabaseHandler:
     _instance = None
 
@@ -172,3 +175,46 @@ class DatabaseHandler:
         if hint:
             return collection.find_one(query, hint=hint)
         return collection.find_one(query)
+
+    def find_documents(self,
+                       db_name: str,
+                       collection_name: str,
+                       filter_dict: Optional[Dict] = None,
+                       projection: Optional[Dict] = None,
+                       limit: Optional[int] = None,
+                       sort: Optional[List] = None) -> List[Dict]:
+        """
+        查询文档
+
+        Args:
+            db_name: 数据库名称
+            collection_name: 集合名称
+            filter_dict: 查询条件
+            projection: 字段投影
+            limit: 限制返回数量
+            sort: 排序条件
+
+        Returns:
+            List[Dict]: 查询结果
+        """
+        try:
+            collection = self.get_mongo_collection(db_name, collection_name)
+
+            cursor = collection.find(
+                filter_dict or {},
+                projection
+            )
+
+            if sort:
+                cursor = cursor.sort(sort)
+
+            if limit:
+                cursor = cursor.limit(limit)
+
+            results = list(cursor)
+            logger.info(f"从集合 {collection_name} 查询到 {len(results)} 条记录")
+            return results
+
+        except Exception as e:
+            logger.error(f"查询集合 {collection_name} 失败: {e}")
+            return []

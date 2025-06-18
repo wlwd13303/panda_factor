@@ -5,10 +5,8 @@ import pandas as pd
 import time
 import traceback
 
-
 from panda_common.handlers.database_handler import DatabaseHandler
 from panda_common.logger_config import logger
-from panda_data_hub.models.requestEntity import FactorsRequest
 
 
 class FactorReader:
@@ -80,41 +78,38 @@ class FactorReader:
             factor_logger.error(f"Error in factor class execution: {str(e)}")
             factor_logger.error(f"Error type: {type(e)}")
 
-    def get_factor(self, symbols, factors, start_date, end_date):
-
-        if isinstance(symbols, str):
-            symbols = [symbols]
-        if isinstance(factors, str):
-            factors = [factors]
-
-        if symbols == None or symbols == []:
-            symbols = self.all_symbols
-
+    def get_factor(self, symbols, factors, start_date, end_date,index_component: Optional[str] = None):
         all_data = []
+        # Convert all factor names to lowercase
+        if isinstance(factors, str):
+            factors = factors.lower()
+        elif isinstance(factors, list):
+            factors = [f.lower() for f in factors]
+        # 检查是否有基础因子
+        base_factors = ["open", "close", "high", "low", "volume","market_cap", "turnover","amount"]
+        requested_base_factors = [f for f in factors if f in base_factors]
 
-        # Query each factor table
-        for factor in factors:
+        # 如果有基础因子，查一次库，再选择留什么字段
+        if requested_base_factors:
+            # 单次查询 factor_base 表
             query = {
-                "symbol": {"$in": symbols},
-                "date": {
-                    "$gte": start_date,
-                    "$lte": end_date
-                }
+                "date": {"$gte": start_date, "$lte": end_date}
             }
-            collection_name = f"factor_{factor}"
-
-            # Get data from MongoDB with index hint
-            records = self.db_handler.mongo_find(
+            if index_component:
+                query['index_component'] = {"$eq": index_component}
+            records = self.db_handler.find_documents(
                 self.config["MONGO_DB"],
-                collection_name,
-                query  # 强制使用复合索引
+                "factor_base",
+                query
             )
-
             if records:
                 # Convert to DataFrame
                 df = pd.DataFrame(list(records))
-                # Rename value column to factor name
-                df = df.rename(columns={"value": factor})
+                # 只保留需要的字段
+                base_fields = ['date', 'symbol']  # 基础字段
+                available_factors = [f for f in requested_base_factors if f in df.columns]
+                selected_fields = base_fields + available_factors
+                df = df[selected_fields]
                 all_data.append(df)
 
         if not all_data:
@@ -130,10 +125,10 @@ class FactorReader:
                 on=['date', 'symbol'],
                 how='outer'
             )
-        return result.drop(columns=['_id'])
+        return result
 
-
-    def get_custom_factor(self, factor_logger: logging.Logger, user_id, factor_name, start_date, end_date):
+    def get_custom_factor(self, factor_logger: logging.Logger, user_id, factor_name, start_date, end_date,
+                          symbol_type: Optional[str] = 'stock'):
         try:
             # Check if factor table exists
             collection_name = f"factor_{factor_name}_{user_id}"
@@ -181,8 +176,8 @@ class FactorReader:
             query = {}
             code_type = records[0]["code_type"]
             code = records[0]["code"]
-            st = records[0]["params"]['include_st']
-            indicator = records[0]["params"]['stock_pool']
+            st = records[0]["params"].get('include_st', True)
+            indicator = records[0]["params"].get('stock_pool', "000985")
             if indicator != "000985":
                 if indicator == "000300":
                     query["index_component"] = "100"
@@ -210,10 +205,10 @@ class FactorReader:
             try:
                 if code_type == "formula":
                     result = mf.create_factor_from_formula(factor_logger, code, start_date, end_date, symbols,
-                                                           query["index_component"])
+                                                           indicator, symbol_type)
                 elif code_type == "python":
-                    result = mf.create_factor_from_class(factor_logger, code, start_date, end_date, symbols,
-                                                         query["index_component"])
+                    result = mf.create_factor_from_class(factor_logger, code, start_date, end_date, symbols, indicator,
+                                                         symbol_type)
                 else:
                     logger.warning(f"Unknown code type: {code_type}")
                     return None
