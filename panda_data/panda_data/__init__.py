@@ -6,7 +6,6 @@ import pandas as pd
 
 from panda_common.config import get_config
 from panda_data.factor.factor_reader import FactorReader
-from panda_data.market_data.fund_portfolio_reader import FundPortfolioReader
 from panda_data.market_data.market_data_reader import MarketDataReader
 from panda_data.market_data.market_stock_cn_minute_reader import MarketStockCnMinReaderV3
 
@@ -14,7 +13,6 @@ _config = None
 _factor = None
 _market_data = None
 _market_min_data: MarketStockCnMinReaderV3 = None
-_fund_protfolio_reader = None
 
 
 def init(configPath: Optional[str] = None) -> None:
@@ -24,7 +22,7 @@ def init(configPath: Optional[str] = None) -> None:
     Args:
         config_path: Path to the config file. If None, will use default config from panda_common.config
     """
-    global _config, _factor, _market_data, _market_min_data, _fund_protfolio_reader
+    global _config, _factor, _market_data, _market_min_data
 
     try:
         # 使用panda_common中的配置
@@ -36,7 +34,6 @@ def init(configPath: Optional[str] = None) -> None:
         _factor = FactorReader(_config)
         _market_data = MarketDataReader(_config)
         _market_min_data = MarketStockCnMinReaderV3(_config)
-        _fund_protfolio_reader = FundPortfolioReader(_config)
     except Exception as e:
         raise RuntimeError(f"Failed to initialize panda_data: {str(e)}")
 
@@ -45,18 +42,6 @@ def get_all_symbols() -> pd.DataFrame:
     if _market_min_data is None:
         raise RuntimeError("Please call init() before using any functions")
     return _market_min_data.get_all_symbols()
-
-
-def get_all_funds() -> pd.DataFrame:
-    if _fund_protfolio_reader is None:
-        raise RuntimeError("Please call init() before using any functions")
-    return _fund_protfolio_reader.get_all_funds()
-
-
-def get_fund_pro(ts_code: str = None, start_date: str = None, end_date: str = None) -> pd.DataFrame:
-    if _fund_protfolio_reader is None:
-        raise RuntimeError("Please call init() before using any functions")
-    return _fund_protfolio_reader.get_fund_pro(ts_code, start_date, end_date)
 
 
 def get_factor(
