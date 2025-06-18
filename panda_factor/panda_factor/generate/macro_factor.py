@@ -424,7 +424,8 @@ class MacroFactor:
 
     def create_factor_from_formula(self, factor_logger: Any, formula: str, start_date: str,
                                    end_date: str, symbols: Optional[List[str]] = None,
-                                   index_component: Optional[str] = None) -> Optional[pd.DataFrame]:
+                                   index_component: Optional[str] = None, symbol_type: Optional[str] = 'stock') -> \
+    Optional[pd.DataFrame]:
         """Create factor from formula"""
         print("\n=== Starting formula execution ===")
         print(f"Formula: {formula}")
@@ -446,7 +447,7 @@ class MacroFactor:
 
         # Get base factor data
         self.base_factors = self.data_handler.get_base_factors_pro(required_factors, extended_start_date, end_date,
-                                                                   symbols)
+                                                                   symbols, type=symbol_type)
         if self.base_factors is None or any(v is None for v in self.base_factors.values()):
             raise ValueError("Missing required base factors")
 
@@ -498,7 +499,8 @@ class MacroFactor:
 
     def create_factor_from_formula_pro(self, factor_logger: Any, formulas: List[str], start_date: str,
                                        end_date: str, symbols: Optional[List[str]] = None,
-                                       index_component: Optional[str] = None) -> Optional[pd.DataFrame]:
+                                       index_component: Optional[str] = None, symbol_type: Optional[str] = 'stock') -> \
+    Optional[pd.DataFrame]:
         """Create multiple factors from formulas in a single operation.
 
         Args:
@@ -539,7 +541,7 @@ class MacroFactor:
 
         # Get all base factor data at once
         self.base_factors = self.data_handler.get_base_factors_pro(required_factors, extended_start_date, end_date,
-                                                                   symbols)
+                                                                   symbols, type=symbol_type)
         if self.base_factors is None or any(v is None for v in self.base_factors.values()):
             raise ValueError("Missing required base factors")
 
@@ -582,8 +584,6 @@ class MacroFactor:
             try:
                 # Evaluate the formula
                 result = eval(result_expr, context)
-                print(f"Result type for {factor_name}: {type(result)}")
-
                 # Store the result
                 results[factor_name] = result
 
@@ -624,7 +624,8 @@ class MacroFactor:
 
     def create_factor_from_class(self, factor_logger: Any, class_code: str, start_date: str,
                                  end_date: str, symbols: Optional[List[str]] = None,
-                                 index_component: Optional[str] = None) -> Optional[pd.DataFrame]:
+                                 index_component: Optional[str] = None, symbol_type: Optional[str] = 'stock') -> \
+    Optional[pd.DataFrame]:
         """Create factor from class"""
         from .factor_loader import FactorLoader
 
@@ -708,7 +709,7 @@ warnings.filterwarnings('ignore')
 
             # Get required factors
             factors = self.data_handler.get_base_factors_pro(required_factors, extended_start_date, end_date, symbols,
-                                                             index_component)
+                                                             index_component, type=symbol_type)
             if factors is None:
                 return None
 

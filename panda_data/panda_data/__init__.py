@@ -49,7 +49,8 @@ def get_factor(
         start_date: str,
         end_date: str,
         symbols: Optional[Union[str, List[str]]] = None,
-        index_component: Optional[str] = None
+        index_component: Optional[str] = None,
+        type: Optional[str] = 'stock'
 ) -> Optional[pd.DataFrame]:
     """
     Get factor data for given symbols and date range
@@ -66,7 +67,7 @@ def get_factor(
     if _factor is None:
         raise RuntimeError("Please call init() before using any functions")
 
-    return _factor.get_factor(symbols, factors, start_date, end_date, index_component)
+    return _factor.get_factor(symbols, factors, start_date, end_date, index_component, type)
 
 
 def get_custom_factor(
@@ -74,7 +75,8 @@ def get_custom_factor(
         user_id: int,
         factor_name: str,
         start_date: str,
-        end_date: str
+        end_date: str,
+        symbol_type: Optional[str] = 'stock'
 ) -> Optional[pd.DataFrame]:
     """
     Get factor data for given symbols and date range
@@ -91,7 +93,7 @@ def get_custom_factor(
     if _factor is None:
         raise RuntimeError("Please call init() before using any functions")
 
-    return _factor.get_custom_factor(factor_logger, user_id, factor_name, start_date, end_date)
+    return _factor.get_custom_factor(factor_logger, user_id, factor_name, start_date, end_date, symbol_type)
 
 def get_factor_by_name(factor_name, start_date, end_date):
     if _factor is None:
