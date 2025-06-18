@@ -78,7 +78,8 @@ class FactorReader:
             factor_logger.error(f"Error in factor class execution: {str(e)}")
             factor_logger.error(f"Error type: {type(e)}")
 
-    def get_factor(self, symbols, factors, start_date, end_date,index_component: Optional[str] = None):
+    def get_factor(self, symbols, factors, start_date, end_date, index_component: Optional[str] = None,
+                   type: Optional[str] = 'stock'):
         all_data = []
         # Convert all factor names to lowercase
         if isinstance(factors, str):
@@ -86,7 +87,7 @@ class FactorReader:
         elif isinstance(factors, list):
             factors = [f.lower() for f in factors]
         # 检查是否有基础因子
-        base_factors = ["open", "close", "high", "low", "volume","market_cap", "turnover","amount"]
+        base_factors = ["open", "close", "high", "low", "volume", "market_cap", "turnover", "amount"]
         requested_base_factors = [f for f in factors if f in base_factors]
 
         # 如果有基础因子，查一次库，再选择留什么字段
@@ -97,11 +98,26 @@ class FactorReader:
             }
             if index_component:
                 query['index_component'] = {"$eq": index_component}
-            records = self.db_handler.find_documents(
-                self.config["MONGO_DB"],
-                "factor_base",
-                query
-            )
+
+            if type == 'future':
+                # Add $expr condition to match symbol with underlying_symbol + "88"
+                query["$expr"] = {
+                    "$eq": [
+                        "$symbol",
+                        {"$concat": ["$underlying_symbol", "88"]}
+                    ]
+                }
+                records = self.db_handler.find_documents(
+                    self.config["MONGO_DB"],
+                    "future_market",
+                    query
+                )
+            else:
+                records = self.db_handler.find_documents(
+                    self.config["MONGO_DB"],
+                    "factor_base",
+                    query
+                )
             if records:
                 # Convert to DataFrame
                 df = pd.DataFrame(list(records))
