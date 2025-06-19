@@ -7,6 +7,7 @@ import traceback
 
 from panda_common.handlers.database_handler import DatabaseHandler
 from panda_common.logger_config import logger
+from panda_data_hub.models.requestEntity import FactorsRequest
 
 
 class FactorReader:
@@ -221,10 +222,10 @@ class FactorReader:
             try:
                 if code_type == "formula":
                     result = mf.create_factor_from_formula(factor_logger, code, start_date, end_date, symbols,
-                                                           indicator, symbol_type)
+                                                           symbol_type=symbol_type)
                 elif code_type == "python":
-                    result = mf.create_factor_from_class(factor_logger, code, start_date, end_date, symbols, indicator,
-                                                         symbol_type)
+                    result = mf.create_factor_from_class(factor_logger, code, start_date, end_date, symbols,
+                                                         symbol_type=symbol_type)
                 else:
                     logger.warning(f"Unknown code type: {code_type}")
                     return None
