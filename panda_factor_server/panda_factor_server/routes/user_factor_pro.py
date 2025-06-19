@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Query
-from panda_server.services.user_factor_service import *
+from panda_factor_server.services.user_factor_service import *
 
 _db_handler = DatabaseHandler(config)
 

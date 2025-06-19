@@ -37,8 +37,8 @@ MONGO_DB: "panda"
 # - "single": 单节点模式，适用于开发环境或小型应用
 # - "replica_set": 副本集模式，提供高可用性和数据冗余
 # - "sharded": 分片模式，用于大规模数据存储（待实现）
-MONGO_TYPE: "single"
-MONGO_REPLICA_SET: "mgset"
+MONGO_TYPE: "replica_set"
+MONGO_REPLICA_SET: "rs0"
 
 # OpenAI配置
 LLM_API_KEY: "这里填写你的KEY"

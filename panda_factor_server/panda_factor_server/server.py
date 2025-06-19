@@ -8,8 +8,8 @@ import pytz
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from panda_server.routes import user_factor_pro
-from panda_server.models.result_data import ResultData
+from panda_factor_server.routes import user_factor_pro
+from panda_factor_server.models.result_data import ResultData
 
 # 设置时区
 os.environ['TZ'] = 'Asia/Shanghai'

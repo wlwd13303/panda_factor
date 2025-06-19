@@ -131,7 +131,7 @@ panda_factor/
 │   └── __main__.py     # 自动更新任务启动入口
 ├── panda_factor        # 因子计算与分析
 ├── panda_llm           # 大模型接入，支持OpenAI协议，兼容Deepseek
-├── panda_server/       # 服务器接口
+├── panda_factor_server/       # 服务器接口
 │   └── __main__.py     # 接口服务启动入口
 ├── panda_web/          # 服务器前端页面
 ├── requirements.txt    # 依赖列表
@@ -140,7 +140,7 @@ panda_factor/
 ## 开发者工具指南
 
 ### PyCharm工具
-请将panda_common、panda_data、panda_data_hub、panda_factor、panda_llm、panda_server这几个文件夹右键标记为Mark Directiory as Sources root
+请将panda_common、panda_data、panda_data_hub、panda_factor、panda_llm、panda_factor_server这几个文件夹右键标记为Mark Directiory as Sources root
 
 ### Visual Studio Code （包含Cursor等衍生）
 请在含有Python解释器的终端中进入各个子模块目录下面，执行：

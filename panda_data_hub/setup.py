@@ -28,7 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'panda_server = panda_server.__main__:app',
+            'panda_factor_server = panda_factor_server.__main__:app',
         ],
     },
 ) 
