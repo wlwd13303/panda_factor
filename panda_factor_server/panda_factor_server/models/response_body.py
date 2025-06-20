@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, validator
 from datetime import datetime
 from typing import Optional, Union, List
-from panda_server.models.common import Params
+from panda_factor_server.models.common import Params
 
 class FactorListResponse(BaseModel):
     """

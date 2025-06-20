@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, validator
 from datetime import date
 from typing import Optional, Text
-from panda_server.models.common import Params
+from panda_factor_server.models.common import Params
 class CreateFactorRequest(BaseModel):
     """
     创建因子请求参数

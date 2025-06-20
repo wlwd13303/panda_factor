@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='panda_server',
+    name='panda_factor_server',
     version='0.1',
     packages=find_packages(),
     include_package_data=True,
@@ -28,7 +28,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'panda_server = panda_server.__main__:app',
+            'panda_factor_server = panda_factor_server.__main__:app',
         ],
     },
 ) 
