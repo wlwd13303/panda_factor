@@ -76,22 +76,23 @@ class DatabaseHandler:
         collection = self.get_mongo_collection(db_name, collection_name)
         return collection.insert_one(document).inserted_id
 
-    def mongo_find(self, db_name, collection_name, query, hint=None, sort=None):
+    def mongo_find(self, db_name, collection_name, query, projection=None, hint=None, sort=None):
         """
         Find documents in MongoDB collection
-        
+
         Args:
             db_name: Database name
             collection_name: Collection name
             query: Query dictionary
+            projection: Fields to return (dict)
             hint: Optional index hint
             sort: Optional sort specification
-            
+
         Returns:
             List of documents
         """
         collection = self.get_mongo_collection(db_name, collection_name)
-        cursor = collection.find(query)
+        cursor = collection.find(query, projection)
         if hint:
             cursor = cursor.hint(hint)
         if sort:
