@@ -100,6 +100,11 @@ class FactorReader:
             if index_component:
                 query['index_component'] = {"$eq": index_component}
 
+            # 构建投影，只查询需要的字段
+            base_fields = ['date', 'symbol']  # 基础字段
+            projection = {field: 1 for field in base_fields + requested_base_factors}
+            projection['_id'] = 0  # 不包含_id字段
+
             if type == 'future':
                 # Add $expr condition to match symbol with underlying_symbol + "88"
                 query["$expr"] = {
@@ -108,25 +113,25 @@ class FactorReader:
                         {"$concat": ["$underlying_symbol", "88"]}
                     ]
                 }
-                records = self.db_handler.find_documents(
+                # 获取集合并使用批量优化
+                collection = self.db_handler.get_mongo_collection(
                     self.config["MONGO_DB"],
-                    "future_market",
-                    query
+                    "future_market"
                 )
+                cursor = collection.find(query, projection).batch_size(100000)
+                records = list(cursor)
             else:
-                records = self.db_handler.find_documents(
+                # 获取集合并使用批量优化
+                collection = self.db_handler.get_mongo_collection(
                     self.config["MONGO_DB"],
-                    "factor_base",
-                    query
+                    "factor_base"
                 )
+                cursor = collection.find(query, projection).batch_size(100000)
+                records = list(cursor)
+
             if records:
                 # Convert to DataFrame
-                df = pd.DataFrame(list(records))
-                # 只保留需要的字段
-                base_fields = ['date', 'symbol']  # 基础字段
-                available_factors = [f for f in requested_base_factors if f in df.columns]
-                selected_fields = base_fields + available_factors
-                df = df[selected_fields]
+                df = pd.DataFrame(records)
                 all_data.append(df)
 
         if not all_data:
@@ -142,7 +147,9 @@ class FactorReader:
                 on=['date', 'symbol'],
                 how='outer'
             )
+
         return result
+
 
     def get_custom_factor(self, factor_logger: logging.Logger, user_id, factor_name, start_date, end_date,
                           symbol_type: Optional[str] = 'stock'):
