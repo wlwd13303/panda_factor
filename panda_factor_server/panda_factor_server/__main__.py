@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from panda_factor_server.routes import user_factor_pro
 from panda_llm.routes import chat_router
 app = FastAPI(

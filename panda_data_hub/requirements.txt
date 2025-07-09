@@ -7,3 +7,5 @@ rqdatac>=2.9.0
 tqsdk>=3.2.10
 tushare>=1.4.21
 pandas_market_calendars>=5.1.0
+chinese_calendar>=1.10.0
+xtquant
