@@ -158,7 +158,7 @@ panda_data.init()
 factor = panda_data.get_factor_by_name(factor_name="VH03cc651", start_date='20240320',end_date='20250325')
 ```
 
-## 加群答疑
+## 加群答疑（备注【开源】更快通过）
 ![PandaAI 交流群](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/wechat_2025-06-27_102633_615.png)
 
 
