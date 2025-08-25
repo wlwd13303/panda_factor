@@ -117,7 +117,7 @@ IF(CLOSE > DELAY(CLOSE, 1), 1, -1)
 
 ## 下载最新数据库
 因表结构更新，请在网盘下载最新的数据库
-网盘链接： https://pan.baidu.com/s/1qnUFy7dw6O2yxa_0rE_2MQ?pwd=iayk 提取码: iayk
+网盘链接: https://pan.baidu.com/s/15jip2SATiORuqaBNMDm4fw?pwd=uupm 提取码: uupm 
 近期更新因子持久化功能，让计算好的因子直接保存，自动更新，极速提取。
 
 ## 📁 项目结构
