@@ -71,14 +71,13 @@ class MarketDataReader:
         st = query_params['st']
 
         # Build query for this chunk
-        # query = {
-        #     "symbol": {"$in": symbols} if symbols else {"$exists": True},
-        #     "date": {
-        #         "$gte": start_date,
-        #         "$lte": end_date
-        #     }
-        # }
         query = {}
+        
+        # Add symbols filter if symbols are specified
+        if symbols:
+            query["symbol"] = {"$in": symbols}
+        
+        # Add date filter
         if start_date == end_date:
             # 如果是同一天，直接精确匹配
             query["date"] = start_date
