@@ -7,13 +7,9 @@ from apscheduler.triggers.cron import CronTrigger
 
 import datetime
 
-from panda_data_hub.data.ricequant_stock_market_cleaner import RQStockMarketCleaner
-from panda_data_hub.data.ricequant_stocks_cleaner import RQStockCleaner
 from panda_data_hub.data.tushare_stocks_cleaner import TSStockCleaner
 from panda_data_hub.data.tushare_stock_market_cleaner import TSStockMarketCleaner
 from panda_data_hub.services.ts_financial_clean_service import FinancialCleanTSService
-# from panda_data_hub.data.xtquant_stock_market_cleaner import XTStockMarketCleaner
-# from panda_data_hub.data.xtquant_stocks_cleaner import XTStockCleaner
 
 
 class DataScheduler:
@@ -28,46 +24,26 @@ class DataScheduler:
         self.scheduler.start()
 
     def _process_data(self):
-        """处理数据清洗和入库"""
-        logger.info(f"Processing data ")
+        """处理数据清洗和入库 - 使用 Tushare"""
+        logger.info("Processing data using Tushare")
         try:
-            data_source = config['DATAHUBSOURCE']
-            if data_source == 'ricequant':
-                # 清洗stock表当日数据
-                stocks_cleaner = RQStockCleaner(self.config)
-                stocks_cleaner.clean_metadata()
-                # 清洗stock_market表当日数据
-                stock_market_cleaner = RQStockMarketCleaner(self.config)
-                stock_market_cleaner.stock_market_clean_daily()
-            elif data_source == 'tushare':
-                # 清洗stock表当日数据
-                stocks_cleaner = TSStockCleaner(self.config)
-                stocks_cleaner.clean_metadata()
-                # 清洗stock_market表当日数据
-                stock_market_cleaner = TSStockMarketCleaner(self.config)
-                stock_market_cleaner.stock_market_clean_daily()
-            # elif data_source == 'xuntou':
-            #     # 清洗stock表当日数据
-            #     stocks_cleaner = XTStockCleaner(self.config)
-            #     stocks_cleaner.clean_metadata()
-            #     # 清洗stock_market表当日数据
-            #     stock_market_cleaner = XTStockMarketCleaner(self.config)
-            #     stock_market_cleaner.stock_market_clean_daily()
+            # 清洗stock表当日数据
+            stocks_cleaner = TSStockCleaner(self.config)
+            stocks_cleaner.clean_metadata()
+            # 清洗stock_market表当日数据
+            stock_market_cleaner = TSStockMarketCleaner(self.config)
+            stock_market_cleaner.stock_market_clean_daily()
         except Exception as e:
-            logger.error(f"Error _process_data : {str(e)}")
+            logger.error(f"Error _process_data: {str(e)}")
     
     def _process_financial_data(self):
-        """处理财务数据清洗和入库（每日更新最近2个季度）"""
-        logger.info("Processing financial data")
+        """处理财务数据清洗和入库（每日更新最近2个季度） - 使用 Tushare"""
+        logger.info("Processing financial data using Tushare")
         try:
-            data_source = config['DATAHUBSOURCE']
-            if data_source == 'tushare':
-                # 每日更新财务数据（最近2个季度）
-                financial_service = FinancialCleanTSService(self.config)
-                financial_service.financial_daily_update()
-                logger.info("Financial data daily update completed")
-            else:
-                logger.warning(f"Financial data update not supported for data source: {data_source}")
+            # 每日更新财务数据（最近2个季度）
+            financial_service = FinancialCleanTSService(self.config)
+            financial_service.financial_daily_update()
+            logger.info("Financial data daily update completed")
         except Exception as e:
             logger.error(f"Error _process_financial_data: {str(e)}")
     

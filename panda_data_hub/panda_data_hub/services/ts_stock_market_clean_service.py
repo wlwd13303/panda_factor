@@ -98,6 +98,8 @@ class StockMarketCleanTSServicePRO(ABC):
                         "current_task": f"正在处理第 {current_batch}/{total_batches} 批次数据",
                         "batch_info": f"批次 {current_batch}/{total_batches} - 处理 {len(batch_days)} 个交易日",
                         "current_date": f"{batch_days[0]} 到 {batch_days[-1]}",
+                        "trading_days_processed": processed_days,
+                        "trading_days_total": total_days,
                     })
                 
                 with ThreadPoolExecutor(max_workers=10) as executor:
@@ -157,6 +159,8 @@ class StockMarketCleanTSServicePRO(ABC):
                         self.progress_callback({
                             "current_task": f"批次间等待 - 已完成 {current_batch}/{total_batches} 批次",
                             "batch_info": f"等待10秒后处理下一批次...",
+                            "trading_days_processed": processed_days,
+                            "trading_days_total": total_days,
                         })
                     time.sleep(10)
         

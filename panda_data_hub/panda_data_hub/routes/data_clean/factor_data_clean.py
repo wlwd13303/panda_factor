@@ -3,9 +3,7 @@ from panda_common.config import config
 from panda_common.logger_config import logger
 from typing import Dict
 
-from panda_data_hub.services.rq_factor_clean_pro_service import FactorCleanerProService
 from panda_data_hub.services.ts_factor_clean_pro_service import FactorCleanerTSProService
-# from panda_data_hub.services.xt_factor_clean_pro_service import FactorCleanerXTProService
 
 router = APIRouter()
 
@@ -31,8 +29,7 @@ async def upsert_factor(start_date: str, end_date: str, background_tasks: Backgr
         "error_message": ""
     }
 
-    data_source = config['DATAHUBSOURCE']
-    logger.info(f"使用数据源: {data_source}")
+    logger.info("使用数据源: Tushare")
 
     def progress_callback(progress: int):
         global current_progress
@@ -53,40 +50,18 @@ async def upsert_factor(start_date: str, end_date: str, background_tasks: Backgr
                 "current_task": "因子数据清洗失败"
             })
 
-    if data_source == 'ricequant':
-        logger.info("初始化RiceQuant因子服务")
-        rice_quant_service = FactorCleanerProService(config)
-        rice_quant_service.set_progress_callback(progress_callback)
-        background_tasks.add_task(
-            run_with_error_handling,
-            rice_quant_service.clean_history_data,
-            start_date,
-            end_date
-        )
-        logger.info("RiceQuant因子后台任务已添加")
-    elif data_source == 'tushare':
-        logger.info("初始化Tushare因子服务")
-        tushare_service = FactorCleanerTSProService(config)
-        tushare_service.set_progress_callback(progress_callback)
-        background_tasks.add_task(
-            run_with_error_handling,
-            tushare_service.clean_history_data,
-            start_date,
-            end_date
-        )
-        logger.info("Tushare因子后台任务已添加")
-    # elif data_source == 'xuntou':
-    #     xt_quant_service = FactorCleanerXTProService(config)
-    #     xt_quant_service.set_progress_callback(progress_callback)
-    #     background_tasks.add_task(
-    #         run_with_error_handling,
-    #         xt_quant_service.factor_history_clean,
-    #         start_date,
-    #         end_date
-    #     )
+    logger.info("初始化Tushare因子服务")
+    tushare_service = FactorCleanerTSProService(config)
+    tushare_service.set_progress_callback(progress_callback)
+    background_tasks.add_task(
+        run_with_error_handling,
+        tushare_service.clean_history_data,
+        start_date,
+        end_date
+    )
+    logger.info("Tushare因子后台任务已添加")
 
-
-    return {"message": f"Factor data cleaning started by {data_source}"}
+    return {"message": "Factor data cleaning started by tushare"}
 
 @router.get('/get_progress_factor_final')
 async def get_progress() -> Dict:

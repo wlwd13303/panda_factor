@@ -386,6 +386,8 @@ class TSFinancialCleaner(ABC):
             'debt_to_assets',        # 资产负债率
             'current_ratio',         # 流动比率
             'quick_ratio',           # 速动比率
+            'q_roe',                 # 净资产收益率(单季度)
+            'q_dt_roe',              # 净资产单季度收益率(扣除非经常损益)
         ]
         
         with tqdm(total=total_tasks, desc="清洗财务指标数据") as pbar:

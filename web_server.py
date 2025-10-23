@@ -80,6 +80,41 @@ async def _fallback_chat_png():
     return Response(content=base64.b64decode(_TRANSPARENT_PNG_BASE64), media_type="image/png")
 
 # ============================================================
+# 数据统计页面
+# ============================================================
+
+@app.get("/data-statistics")
+async def data_statistics():
+    """数据列表统计页面"""
+    import os
+    html_file = frontend_dir / "data_statistics.html"
+    if html_file.exists():
+        with open(html_file, 'r', encoding='utf-8') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>数据统计页面未找到</h1><p>请确保 data_statistics.html 文件存在</p>", status_code=404)
+
+@app.get("/financial-data-clean")
+async def financial_data_clean():
+    """财务数据清洗页面"""
+    html_file = frontend_dir / "financial_data_clean.html"
+    if html_file.exists():
+        with open(html_file, 'r', encoding='utf-8') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>财务数据清洗页面未找到</h1><p>请确保 financial_data_clean.html 文件存在</p>", status_code=404)
+
+@app.get("/stock-market-clean")
+async def stock_market_clean():
+    """股票行情清洗页面"""
+    html_file = frontend_dir / "stock_market_clean.html"
+    if html_file.exists():
+        with open(html_file, 'r', encoding='utf-8') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>股票行情清洗页面未找到</h1><p>请确保 stock_market_clean.html 文件存在</p>", status_code=404)
+
+# ============================================================
 # 根路由
 # ============================================================
 
@@ -292,23 +327,23 @@ async def navigation_home():
                     </div>
                 </a>
                 
-                <a href="/factor/#/datahublist" class="nav-item">
+                <a href="/data-statistics" class="nav-item">
                     <div class="nav-title">
                         <span class="nav-icon">📊</span>
                         数据列表查看
                     </div>
                     <div class="nav-desc">
-                        查看数据清洗状态、交易日数据统计和数据完整性
+                        查看股票、因子、财务数据统计和数据完整性（支持财务数据）
                     </div>
                 </a>
                 
-                <a href="/factor/#/datahubdataclean" class="nav-item">
+                <a href="/stock-market-clean" class="nav-item">
                     <div class="nav-title">
                         <span class="nav-icon">🧹</span>
-                        股票数据清洗
+                        股票行情清洗
                     </div>
                     <div class="nav-desc">
-                        清洗股票行情数据、成交量数据和基础信息
+                        清洗股票日线行情数据（开高低收、成交量、成交额等）
                     </div>
                 </a>
                 
@@ -318,7 +353,17 @@ async def navigation_home():
                         因子数据清洗
                     </div>
                     <div class="nav-desc">
-                        清洗技术指标、财务数据和自定义因子数据
+                        清洗技术指标和自定义因子数据
+                    </div>
+                </a>
+                
+                <a href="/financial-data-clean" class="nav-item">
+                    <div class="nav-title">
+                        <span class="nav-icon">💰</span>
+                        财务数据清洗
+                    </div>
+                    <div class="nav-desc">
+                        清洗财务指标、利润表、资产负债表和现金流量表数据
                     </div>
                 </a>
             </div>

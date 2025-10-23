@@ -35,20 +35,11 @@ class DataSourceConfigRedefine(ABC):
         except FileNotFoundError:
             raise FileNotFoundError(f"配置文件不存在: {config_path}")
 
-        # 3. 定义字段更新规则（正则表达式模式）
+        # 3. 定义字段更新规则（正则表达式模式）- 只支持 Tushare
         update_rules = {
-            'ricequant': [
-                (r'^(\s*)MUSER\s*:.*$', f'\\1MUSER: "{requst.m_user_name}"', requst.m_user_name),  # 添加条件字段
-                (r'^(\s*)MPASSWORD\s*:.*$', f'\\1MPASSWORD: "{requst.m_password}"', requst.m_password),
-                (r'^(\s*)DATAHUBSOURCE\s*:.*$', '\\1DATAHUBSOURCE: "ricequant"', True)  # 数据源必须更新
-            ],
             'tushare': [
                 (r'^(\s*)TS_TOKEN\s*:.*$', f'\\1TS_TOKEN: "{requst.admin_token}"', requst.admin_token),
                 (r'^(\s*)DATAHUBSOURCE\s*:.*$', '\\1DATAHUBSOURCE: "tushare"', True)
-            ],
-            'xuntou': [
-                (r'^(\s*)XT_TOKEN\s*:.*$', f'\\1XT_TOKEN: "{requst.admin_token}"', requst.admin_token),
-                (r'^(\s*)DATAHUBSOURCE\s*:.*$', '\\1DATAHUBSOURCE: "xuntou"', True)
             ]
         }
 
@@ -124,25 +115,14 @@ class DataSourceConfigRedefine(ABC):
             raise
     
     def _reload_data_source_token(self, request: ConfigRequest):
-        """重新设置数据源token"""
+        """重新设置数据源token - 只支持 Tushare"""
         try:
             if request.data_source == 'tushare' and request.admin_token:
                 # 重新设置tushare token
                 ts.set_token(request.admin_token)
                 logger.info(f"Tushare token已更新")
-                
-            elif request.data_source == 'ricequant' and request.m_user_name and request.m_password:
-                # 重新登录ricequant
-                try:
-                    import rqdatac
-                    rqdatac.init(request.m_user_name, request.m_password)
-                    logger.info(f"RiceQuant已重新登录")
-                except Exception as e:
-                    logger.warning(f"RiceQuant重新登录失败: {str(e)}")
-                    
-            elif request.data_source == 'xuntou' and request.admin_token:
-                # 讯投的token处理
-                logger.info(f"XunTou token已更新")
+            else:
+                logger.warning(f"不支持的数据源: {request.data_source}，只支持 tushare")
                 
         except Exception as e:
             logger.error(f"数据源token更新失败: {str(e)}")

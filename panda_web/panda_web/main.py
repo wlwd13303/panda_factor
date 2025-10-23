@@ -41,6 +41,14 @@ assets_dir = os.path.join(DIST_DIR, "assets")
 if os.path.isdir(assets_dir):
     app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
 
+# Data statistics page
+@app.get("/data-statistics")
+async def data_statistics():
+    """数据列表统计页面"""
+    html_file = os.path.join(DIST_DIR, "data_statistics.html")
+    with open(html_file, 'r', encoding='utf-8') as f:
+        return HTMLResponse(content=f.read())
+
 # Create a beautiful navigation homepage
 @app.get("/")
 async def navigation_home():
@@ -250,13 +258,13 @@ async def navigation_home():
                     </div>
                 </a>
                 
-                <a href="/factor/#/datahublist" class="nav-item">
+                <a href="/data-statistics" class="nav-item">
                     <div class="nav-title">
                         <span class="nav-icon">📊</span>
                         数据列表查看
                     </div>
                     <div class="nav-desc">
-                        查看数据清洗状态、交易日数据统计和数据完整性
+                        查看股票、因子、财务数据统计和数据完整性（支持财务数据）
                     </div>
                 </a>
                 

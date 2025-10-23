@@ -6,11 +6,7 @@ from fastapi import APIRouter, BackgroundTasks
 from panda_common.config import config
 from panda_common.logger_config import logger
 
-from panda_data_hub.services.rq_stock_market_clean_service import StockMarketCleanRQServicePRO
 from panda_data_hub.services.ts_stock_market_clean_service import StockMarketCleanTSServicePRO
-# from panda_data_hub.services.xt_download_service import XTDownloadService
-
-# from panda_data_hub.services.xt_stock_market_clean_service import StockMarketCleanXTServicePRO
 
 router = APIRouter()
 
@@ -55,14 +51,13 @@ async def upsert_stockmarket(start_date: str, end_date: str, background_tasks: B
         "estimated_completion": None,
         "current_date": "",
         "error_message": "",
-        "data_source": config['DATAHUBSOURCE'],
+        "data_source": "tushare",
         "batch_info": "",
         "trading_days_processed": 0,
         "trading_days_total": 0,
     })
 
-    data_source = config['DATAHUBSOURCE']
-    logger.info(f"使用数据源: {data_source}")
+    logger.info("使用数据源: Tushare")
 
     def progress_callback(progress_info: dict):
         """
@@ -110,39 +105,18 @@ async def upsert_stockmarket(start_date: str, end_date: str, background_tasks: B
                 "current_task": "数据清洗失败"
             })
     
-    if data_source  == 'ricequant':
-        logger.info("初始化RiceQuant服务")
-        rice_quant_service = StockMarketCleanRQServicePRO(config)
-        rice_quant_service.set_progress_callback(progress_callback)
-        # 在后台运行数据清洗任务
-        background_tasks.add_task(
-            run_with_error_handling,
-            rice_quant_service.stock_market_clean_by_time,
-            start_date,
-            end_date
-        )
-        logger.info("RiceQuant后台任务已添加")
-    elif data_source == 'tushare':
-        logger.info("初始化Tushare服务")
-        tushare_service = StockMarketCleanTSServicePRO(config)
-        tushare_service.set_progress_callback(progress_callback)
-        background_tasks.add_task(
-            run_with_error_handling,
-            tushare_service.stock_market_history_clean,
-            start_date,
-            end_date
-        )
-        logger.info("Tushare后台任务已添加")
-    # elif data_source == 'xuntou':
-    #     xt_quant_service = StockMarketCleanXTServicePRO(config)
-    #     xt_quant_service.set_progress_callback(progress_callback)
-    #     background_tasks.add_task(
-    #         run_with_error_handling,
-    #         xt_quant_service.stock_market_history_clean,
-    #         start_date,
-    #         end_date
-    #     )
-    return {"message": f"Stock market data cleaning started by {data_source}"}
+    logger.info("初始化Tushare服务")
+    tushare_service = StockMarketCleanTSServicePRO(config)
+    tushare_service.set_progress_callback(progress_callback)
+    background_tasks.add_task(
+        run_with_error_handling,
+        tushare_service.stock_market_history_clean,
+        start_date,
+        end_date
+    )
+    logger.info("Tushare后台任务已添加")
+    
+    return {"message": "Stock market data cleaning started by tushare"}
 
 
 @router.get('/get_progress_stock_final')
@@ -173,20 +147,3 @@ async def get_progress() -> Dict:
             "processed_count": 0,
             "total_count": 0
         }
-
-
-# @router.get("/download_xt_data")
-# async def download_xt_data(start_date: str, end_date: str,background_tasks: BackgroundTasks):
-#
-#     def progress_callback(progress: int):
-#         global current_progress
-#         current_progress = progress
-#
-#     service = XTDownloadService(config)
-#     service.set_progress_callback(progress_callback)
-#     background_tasks.add_task(
-#         service.xt_price_data_download,
-#         start_date,
-#         end_date
-#     )
-#     return {"message": "XTData data downloading started"}
