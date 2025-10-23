@@ -48,6 +48,14 @@ class StockMarketCleanTSServicePRO(ABC):
     def stock_market_history_clean(self, start_date, end_date):
 
         logger.info("Starting market data cleaning for tushare")
+        
+        # 转换日期格式：20250930 -> 2025-09-30
+        if len(start_date) == 8 and start_date.isdigit():
+            start_date = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
+        if len(end_date) == 8 and end_date.isdigit():
+            end_date = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:]}"
+        
+        logger.info(f"日期范围: {start_date} 至 {end_date}")
 
         # 获取交易日
         date_range = pd.date_range(start=start_date, end=end_date, freq='D')
@@ -61,12 +69,37 @@ class StockMarketCleanTSServicePRO(ABC):
         logger.info(f"找到 {len(trading_days)} 个交易日需要处理")
         total_days = len(trading_days)
         processed_days = 0
+        
+        # 初始化进度信息
+        if self.progress_callback:
+            self.progress_callback({
+                "progress_percent": 0,
+                "current_task": "准备开始处理交易日数据",
+                "processed_count": 0,
+                "total_count": total_days,
+                "current_date": "",
+                "batch_info": f"总共需要处理 {total_days} 个交易日",
+                "trading_days_processed": 0,
+                "trading_days_total": total_days,
+            })
         # 根据交易日去循环
         with tqdm(total=len(trading_days), desc="Processing Trading Days") as pbar:
             # 分批处理，每批8天
             batch_size = 8
+            total_batches = (len(trading_days) - 1) // batch_size + 1
+            
             for i in range(0, len(trading_days), batch_size):
+                current_batch = i // batch_size + 1
                 batch_days = trading_days[i:i + batch_size]
+                
+                # 更新批次进度信息
+                if self.progress_callback:
+                    self.progress_callback({
+                        "current_task": f"正在处理第 {current_batch}/{total_batches} 批次数据",
+                        "batch_info": f"批次 {current_batch}/{total_batches} - 处理 {len(batch_days)} 个交易日",
+                        "current_date": f"{batch_days[0]} 到 {batch_days[-1]}",
+                    })
+                
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = []
                     for date in batch_days:
@@ -76,26 +109,72 @@ class StockMarketCleanTSServicePRO(ABC):
                         ))
 
                     # 等待当前批次的所有任务完成
-                    for future in futures:
+                    for future_idx, future in enumerate(futures):
                         try:
                             future.result()
                             processed_days += 1
                             progress = int((processed_days / total_days) * 100)
-
-                            # 更新进度
+                            
+                            current_date = batch_days[future_idx] if future_idx < len(batch_days) else ""
+                            
+                            # 更新详细进度
                             if self.progress_callback:
-                                self.progress_callback(progress)
+                                self.progress_callback({
+                                    "progress_percent": progress,
+                                    "current_task": f"正在处理交易日数据",
+                                    "processed_count": processed_days,
+                                    "total_count": total_days,
+                                    "current_date": current_date,
+                                    "batch_info": f"批次 {current_batch}/{total_batches} - 已完成 {processed_days}/{total_days} 个交易日",
+                                    "trading_days_processed": processed_days,
+                                    "trading_days_total": total_days,
+                                })
                             pbar.update(1)
+                            logger.info(f"完成处理交易日: {current_date} ({processed_days}/{total_days})")
+                            
                         except Exception as e:
-                            logger.error(f"Task failed: {e}")
-                            pbar.update(1)  # 即使任务失败也更新进度条
+                            processed_days += 1
+                            current_date = batch_days[future_idx] if future_idx < len(batch_days) else ""
+                            logger.error(f"处理交易日 {current_date} 失败: {e}")
+                            
+                            # 即使失败也更新进度
+                            if self.progress_callback:
+                                progress = int((processed_days / total_days) * 100)
+                                self.progress_callback({
+                                    "progress_percent": progress,
+                                    "current_task": f"处理交易日 {current_date} 时出现错误",
+                                    "processed_count": processed_days,
+                                    "total_count": total_days,
+                                    "current_date": current_date,
+                                    "error_message": f"处理 {current_date} 失败: {str(e)[:100]}...",
+                                })
+                            pbar.update(1)
 
                 # 批次之间添加短暂延迟，避免连接数超限
                 if i + batch_size < len(trading_days):
-                    logger.info(
-                        f"完成批次 {i // batch_size + 1}/{(len(trading_days) - 1) // batch_size + 1}，等待10秒后继续...")
+                    logger.info(f"完成批次 {current_batch}/{total_batches}，等待10秒后继续...")
+                    if self.progress_callback:
+                        self.progress_callback({
+                            "current_task": f"批次间等待 - 已完成 {current_batch}/{total_batches} 批次",
+                            "batch_info": f"等待10秒后处理下一批次...",
+                        })
                     time.sleep(10)
+        
         logger.info("所有交易日数据处理完成")
+        
+        # 发送完成状态
+        if self.progress_callback:
+            self.progress_callback({
+                "progress_percent": 100,
+                "current_task": "数据清洗已完成",
+                "processed_count": total_days,
+                "total_count": total_days,
+                "current_date": "",
+                "batch_info": f"成功处理了 {total_days} 个交易日的数据",
+                "trading_days_processed": total_days,
+                "trading_days_total": total_days,
+                "status": "completed"
+            })
 
     def clean_meta_market_data(self,date_str):
         try:
@@ -104,6 +183,18 @@ class StockMarketCleanTSServicePRO(ABC):
             price_data = self.pro.query('daily', trade_date=date)
             # 重置股票行情数据索引
             price_data.reset_index(drop=False, inplace=True)
+            
+            total_stocks = len(price_data)
+            logger.info(f"开始处理 {date_str} 的数据，共 {total_stocks} 只股票")
+            if self.progress_callback:
+                self.progress_callback({
+                    "stock_phase": "index_component",
+                    "stock_processed": 0,
+                    "stock_total": int(total_stocks),
+                    "stock_progress_percent": 0,
+                    "last_message": f"开始处理 {date_str} 的数据，共 {int(total_stocks)} 只股票"
+                })
+            
             # 洗 index_components列
             price_data['index_component'] = None
 
@@ -116,14 +207,38 @@ class StockMarketCleanTSServicePRO(ABC):
             zz_500 = self.pro.query('index_weight', index_code='000905.SH', start_date=mid_date, end_date=last_date)
             # 中证1000
             zz_1000 = self.pro.query('index_weight', index_code='000852.SH', start_date=mid_date, end_date=last_date)
+            
+            processed_stocks = 0
             for idx, row in price_data.iterrows():
                 try:
                     component = self.clean_index_components(data_symbol=row['ts_code'], date=date,hs_300 =hs_300,zz_500 = zz_500,zz_1000 = zz_1000)
                     price_data.at[idx, 'index_component'] = component
-                    logger.info(f"Success to clean index for {row['ts_code']} on {date}")
+                    processed_stocks += 1
+                    
+                    # 每处理100只股票记录一次进度（避免日志过多）
+                    if processed_stocks % 100 == 0:
+                        logger.info(f"处理指数成分股进度: {processed_stocks}/{total_stocks} ({date_str})")
+                        if self.progress_callback:
+                            self.progress_callback({
+                                "stock_phase": "index_component",
+                                "stock_processed": int(processed_stocks),
+                                "stock_total": int(total_stocks),
+                                "stock_progress_percent": int(processed_stocks/ max(1,total_stocks) * 100),
+                                "last_message": f"指数成分: {int(processed_stocks)}/{int(total_stocks)} ({date_str})"
+                            })
                 except Exception as e:
                     logger.error(f"Failed to clean index for {row['ts_code']} on {date}: {str(e)}")
                     continue
+            
+            logger.info(f"完成指数成分股清洗: {processed_stocks}/{total_stocks} ({date_str})")
+            if self.progress_callback:
+                self.progress_callback({
+                    "stock_phase": "name_clean",
+                    "stock_processed": 0,
+                    "stock_total": int(total_stocks),
+                    "stock_progress_percent": 0,
+                    "last_message": f"开始清洗股票名称 ({date_str})"
+                })
             # 洗name列
             # 报错ERROR - Error checking if ****** on date: single positional indexer is out-of-bounds，说明该股票已经退市
             price_data['name'] = None
@@ -132,14 +247,30 @@ class StockMarketCleanTSServicePRO(ABC):
             namechange_info = self.pro.query('namechange', end_date=date)
             #获取目前所有股票的名称
             stock_info = self.pro.query('stock_basic')
+            
+            processed_names = 0
             for idx, row in price_data.iterrows():
                 try:
                     stock_name = self.clean_stock_name(data_symbol=row['ts_code'], date=date,namechange_info = namechange_info,stock_info = stock_info)
                     price_data.at[idx, 'name'] = stock_name
-                    # logger.info(f"Success to clean name for {row['ts_code']} on {date}")
+                    processed_names += 1
+                    
+                    # 每处理100只股票记录一次进度
+                    if processed_names % 100 == 0:
+                        logger.info(f"处理股票名称进度: {processed_names}/{total_stocks} ({date_str})")
+                        if self.progress_callback:
+                            self.progress_callback({
+                                "stock_phase": "name_clean",
+                                "stock_processed": int(processed_names),
+                                "stock_total": int(total_stocks),
+                                "stock_progress_percent": int(processed_names/ max(1,total_stocks) * 100),
+                                "last_message": f"名称清洗: {int(processed_names)}/{int(total_stocks)} ({date_str})"
+                            })
                 except Exception as e:
                     logger.error(f"Failed to clean name for {row['ts_code']} on {date}: {str(e)}")
                     continue
+            
+            logger.info(f"完成股票名称清洗: {processed_names}/{total_stocks} ({date_str})")
             price_data = price_data.drop(columns=['index','change','pct_chg','amount'])
             price_data = price_data.rename(columns={'vol': 'volume'})
             price_data = price_data.rename(columns={'trade_date': 'date'})
@@ -160,6 +291,17 @@ class StockMarketCleanTSServicePRO(ABC):
             price_data['volume'] = price_data['volume']*100
             # 过滤掉北交所的股票
             price_data = price_data[~price_data['symbol'].str.contains('BJ')]
+            final_stock_count = len(price_data)
+            logger.info(f"过滤北交所后剩余 {final_stock_count} 只股票 ({date_str})")
+            if self.progress_callback:
+                self.progress_callback({
+                    "stock_phase": "db_write",
+                    "stock_processed": 0,
+                    "stock_total": int(final_stock_count),
+                    "stock_progress_percent": 0,
+                    "last_message": f"写入数据库: 待写入 {int(final_stock_count)} 只股票 ({date_str})"
+                })
+            
             #重新排列
             desired_order = ['date', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'pre_close',
                              'limit_up', 'limit_down', 'index_component', 'name']
@@ -177,7 +319,16 @@ class StockMarketCleanTSServicePRO(ABC):
             if upsert_operations:
                 self.db_handler.mongo_client[self.config["MONGO_DB"]]['stock_market'].bulk_write(
                     upsert_operations)
-                # logger.info(f"Successfully upserted market data for date: {date}")
+                logger.info(f"成功写入数据库: {final_stock_count} 只股票的数据 ({date_str})")
+                if self.progress_callback:
+                    self.progress_callback({
+                        "db_write_count": int(final_stock_count),
+                        "stock_phase": "db_write",
+                        "stock_processed": int(final_stock_count),
+                        "stock_total": int(final_stock_count),
+                        "stock_progress_percent": 100,
+                        "last_message": f"成功写入数据库: {int(final_stock_count)} 只股票的数据 ({date_str})"
+                    })
 
         except Exception as e:
             logger.error({e})

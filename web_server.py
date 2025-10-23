@@ -1,49 +1,91 @@
-import os
-import uvicorn
+"""
+PandaAI Web服务器
+整合前端 + 数据清洗API
+不包含因子计算（避免初始化问题）
+"""
+from pathlib import Path
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import Response
-import base64
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response, HTMLResponse
+import base64
 
 # Import data hub routes
 from panda_data_hub.routes.data_clean import factor_data_clean, stock_market_data_clean, financial_data_clean
 from panda_data_hub.routes.config import config_redefine
 from panda_data_hub.routes.query import data_query
 
-app = FastAPI(title="PandaAI Web Interface")
+# Import AI chat routes
+from panda_llm.routes import chat_router
+
+app = FastAPI(
+    title="PandaAI Web服务",
+    description="前端界面 + 数据清洗API",
+    version="1.0.0"
+)
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Register data hub API routes
-app.include_router(data_query.router, prefix="/datahub/api/v1", tags=["data_query"])
-app.include_router(config_redefine.router, prefix="/datahub/api/v1", tags=["config_redefine"])
-app.include_router(factor_data_clean.router, prefix="/datahub/api/v1", tags=["factor_data_clean"])
-app.include_router(stock_market_data_clean.router, prefix="/datahub/api/v1", tags=["stock_market_data_clean"])
-app.include_router(financial_data_clean.router, prefix="/datahub/api/v1", tags=["financial_data_clean"])
+# ============================================================
+# 注册API路由
+# ============================================================
 
-# Get the absolute path to the static directory
-DIST_DIR = os.path.join(os.path.dirname(__file__), "static")
+# 数据清洗相关API
+app.include_router(data_query.router, prefix="/datahub/api/v1", tags=["数据查询"])
+app.include_router(config_redefine.router, prefix="/datahub/api/v1", tags=["配置管理"])
+app.include_router(factor_data_clean.router, prefix="/datahub/api/v1", tags=["因子数据清洗"])
+app.include_router(stock_market_data_clean.router, prefix="/datahub/api/v1", tags=["股票市场数据清洗"])
+app.include_router(financial_data_clean.router, prefix="/datahub/api/v1", tags=["财务数据清洗"])
 
-# Mount the Vue dist directory at /factor path
-app.mount("/factor", StaticFiles(directory=DIST_DIR, html=True), name="static")
+# AI对话API
+app.include_router(chat_router.router, prefix="/llm", tags=["AI对话"])
 
-# Also mount assets at root to handle absolute "/assets/*" requests from bundle
-assets_dir = os.path.join(DIST_DIR, "assets")
-if os.path.isdir(assets_dir):
-    app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+# ============================================================
+# 静态文件服务 - 前端界面
+# ============================================================
 
-# Create a beautiful navigation homepage
+frontend_dir = Path(__file__).parent / "panda_web" / "panda_web" / "static"
+
+if frontend_dir.exists():
+    app.mount("/factor", StaticFiles(directory=str(frontend_dir), html=True), name="factor")
+    # 兼容打包产物中对 "/assets/*" 的绝对路径请求
+    assets_dir = frontend_dir / "assets"
+    if assets_dir.exists():
+        app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+    print(f"✓ 前端静态文件已挂载: {frontend_dir}")
+else:
+    print(f"⚠ 警告: 前端目录不存在: {frontend_dir}")
+
+# 针对缺失资源提供兜底占位图，避免控制台 404 噪音
+# 1x1 透明 PNG（base64）
+_TRANSPARENT_PNG_BASE64 = (
+    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Qm1cEwAAAAASUVORK5CYII="
+)
+
+@app.get("/assets/chat-dI4p2fsV.png")
+async def _fallback_chat_png():
+    try:
+        file_path = (frontend_dir / "assets" / "chat-dI4p2fsV.png")
+        if file_path.exists():
+            return Response(content=file_path.read_bytes(), media_type="image/png")
+    except Exception:
+        pass
+    return Response(content=base64.b64decode(_TRANSPARENT_PNG_BASE64), media_type="image/png")
+
+# ============================================================
+# 根路由
+# ============================================================
+
 @app.get("/")
 async def navigation_home():
+    """导航主页"""
     html_content = """
     <!DOCTYPE html>
     <html lang="zh-CN">
@@ -308,19 +350,22 @@ async def navigation_home():
             // 检查服务状态
             async function checkServiceStatus(port, name) {
                 try {
-                    const response = await fetch(`http://localhost:${port}/`, {
+                    const response = await fetch(`http://localhost:${port}/health`, {
                         method: 'GET',
-                        mode: 'cors',
-                        timeout: 3000
+                        mode: 'cors'
                     });
-                    return {
-                        name: name,
-                        port: port,
-                        status: 'running',
-                        message: '运行中'
-                    };
+                    if (response.ok) {
+                        return {
+                            name: name,
+                            port: port,
+                            status: 'running',
+                            message: '运行中'
+                        };
+                    } else {
+                        throw new Error('Service not healthy');
+                    }
                 } catch (error) {
-                    return {
+    return {
                         name: name,
                         port: port,
                         status: 'stopped',
@@ -337,8 +382,7 @@ async def navigation_home():
                     // 检查三个服务的状态
                     const services = [
                         { port: 8080, name: '前端服务' },
-                        { port: 8111, name: '后端API' },
-                        { port: 8222, name: '数据服务' }
+                        { port: 8111, name: '因子计算服务' }
                     ];
                     
                     const statusPromises = services.map(service => 
@@ -381,26 +425,65 @@ async def navigation_home():
     """
     return HTMLResponse(content=html_content)
 
-# Fallback 1x1 transparent PNG for missing chat asset to avoid 404 noise
-_TRANSPARENT_PNG_BASE64 = (
-    b"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Qm1cEwAAAAASUVORK5CYII="
-)
+@app.get("/health")
+async def health_check():
+    """健康检查"""
+    return {"status": "healthy", "service": "web"}
 
-@app.get("/assets/chat-dI4p2fsV.png")
-async def _fallback_chat_png_main():
-    try:
-        file_path = os.path.join(assets_dir, "chat-dI4p2fsV.png")
-        if os.path.isfile(file_path):
-            with open(file_path, "rb") as f:
-                return Response(content=f.read(), media_type="image/png")
-    except Exception:
-        pass
-    return Response(content=base64.b64decode(_TRANSPARENT_PNG_BASE64), media_type="image/png")
+@app.get("/api/info")
+async def api_info():
+    """API信息（JSON格式）"""
+    return {
+        "service": "PandaAI Web服务",
+        "version": "1.0.0",
+        "endpoints": {
+            "前端界面": "/factor/",
+            "API文档": "/docs",
+            "数据清洗API": "/datahub/api/v1/",
+            "AI对话API": "/llm/"
+        },
+        "status": "running",
+        "note": "因子计算服务运行在 8111 端口"
+    }
 
-if __name__ == "__main__":
+# ============================================================
+# 启动函数
+# ============================================================
+
+def main():
+    import uvicorn
+    from panda_common.logger_config import logger
+    
+    logger.info("=" * 60)
+    logger.info("PandaAI Web服务器启动中...")
+    logger.info("=" * 60)
+    
+    print("\n" + "=" * 60)
+    print("  PandaAI Web服务器")
+    print("=" * 60)
+    print("\n📊 服务地址:")
+    print("  前端界面: http://localhost:8080/factor/")
+    print("  API文档:  http://localhost:8080/docs")
+    print("  健康检查: http://localhost:8080/health")
+    print("\n🔌 API端点:")
+    print("  数据清洗: /datahub/api/v1/")
+    print("  配置管理: /datahub/api/v1/config_redefine_data_source")
+    print("  AI对话:   /llm/")
+    print("\n💡 提示:")
+    print("  - 此服务包含前端界面、数据清洗和AI对话功能")
+    print("  - 因子计算服务需要单独启动（端口8111）")
+    print("  - 使用 'python -m panda_factor_server' 启动因子服务")
+    print("  - AI对话使用DeepSeek API（配置在config.yaml）")
+    print("\n⚡ 按 Ctrl+C 停止服务")
+    print("=" * 60 + "\n")
+    
     uvicorn.run(
-        "main:app",
+        app,
         host="0.0.0.0",
         port=8080,
-        reload=True  # Enable auto-reload during development
-    ) 
+        log_level="info"
+    )
+
+if __name__ == "__main__":
+    main()
+

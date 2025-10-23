@@ -1,0 +1,12 @@
+.factor-list-page {
+  width: 100%;
+}
+
+.factor-list-page .ant-table {
+  font-size: 14px;
+}
+
+.factor-list-page .ant-btn-link {
+  padding: 0;
+}
+

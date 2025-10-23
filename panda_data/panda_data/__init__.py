@@ -5,14 +5,25 @@ from typing import Optional, List, Union
 import pandas as pd
 
 from panda_common.config import get_config
-from panda_data.factor.factor_reader import FactorReader
-from panda_data.market_data.market_data_reader import MarketDataReader
-from panda_data.market_data.market_stock_cn_minute_reader import MarketStockCnMinReaderV3
 
+# 延迟导入，避免循环依赖和初始化错误
 _config = None
 _factor = None
 _market_data = None
-_market_min_data: MarketStockCnMinReaderV3 = None
+_market_min_data = None
+
+# 明确导出的公共接口
+__all__ = [
+    'init',
+    'get_all_symbols',
+    'get_factor',
+    'get_custom_factor',
+    'get_factor_by_name',
+    'get_stock_instruments',
+    'get_market_min_data',
+    'get_market_data',
+    'get_available_market_fields'
+]
 
 
 def init(configPath: Optional[str] = None) -> None:
@@ -25,6 +36,11 @@ def init(configPath: Optional[str] = None) -> None:
     global _config, _factor, _market_data, _market_min_data
 
     try:
+        # 延迟导入，避免在模块加载时就导入
+        from panda_data.factor.factor_reader import FactorReader
+        from panda_data.market_data.market_data_reader import MarketDataReader
+        from panda_data.market_data.market_stock_cn_minute_reader import MarketStockCnMinReaderV3
+        
         # 使用panda_common中的配置
         _config = get_config()
 

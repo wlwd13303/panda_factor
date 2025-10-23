@@ -3,6 +3,31 @@
     <link rel="icon" type="image/x-icon" href="/factor/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PandaAI</title>
+    <script>
+      // 将前端中硬编码的地址重写为本地接口
+      (function(){
+        const originalFetch = window.fetch;
+        window.fetch = function(input, init){
+          try{
+            const url = typeof input === 'string' ? input : (input && input.url);
+            
+            // 重写 LLM 地址
+            if (url && url.indexOf('https://www.pandaai.online/llm/chat') === 0) {
+              input = '/llm/chat';
+            }
+            
+            // 重写 8222 端口的数据请求到当前端口 (8080)
+            if (url && url.indexOf('http://localhost:8222/') === 0) {
+              input = url.replace('http://localhost:8222/', '/');
+              console.log('Redirecting 8222 request to:', input);
+            }
+          }catch(e){
+            console.error('Fetch interceptor error:', e);
+          }
+          return originalFetch(input, init);
+        };
+      })();
+    </script>
     <script crossorigin="">import('/factor/assets/index-B2hqoKuT.js').finally(() => {
             
     const qiankunLifeCycle = window.moudleQiankunAppLifeCycles && window.moudleQiankunAppLifeCycles['vite-sub-app'];
@@ -41,4 +66,149 @@
       update
     };
   })(window);
-</script></body></html>
+</script>
+
+    <!-- Floating progress panel (stocks/factors) -->
+    <style>
+      /* 隐藏主界面中间的冗余进度显示，避免与右下角浮动面板混淆 */
+      .data-clean-progress-container,
+      .el-card.data-clean-card,
+      [class*="progress-card"],
+      [class*="clean-progress"] {
+        display: none !important;
+      }
+      
+      .panda-progress-panel{position:fixed;right:16px;bottom:16px;z-index:9999;width:320px;background:rgba(17,17,17,.92);color:#eaeaea;border:1px solid rgba(255,255,255,.08);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.25);backdrop-filter:blur(6px);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Roboto',sans-serif}
+      .panda-progress-header{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.06);font-weight:600;font-size:13px}
+      .panda-progress-body{padding:10px 12px}
+      .panda-row{margin-bottom:10px}
+      .panda-title{font-size:12px;opacity:.85;margin-bottom:6px}
+      .panda-bar{height:8px;background:#2a2a2a;border-radius:999px;overflow:hidden}
+      .panda-fill{height:100%;width:0;background:linear-gradient(90deg,#22c55e,#84cc16);transition:width .3s ease}
+      .panda-meta{margin-top:6px;font-size:12px;opacity:.8;line-height:1.4}
+      .panda-status{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;margin-left:8px}
+      .panda-status.running{background:rgba(59,130,246,.18);color:#93c5fd}
+      .panda-status.completed{background:rgba(34,197,94,.18);color:#86efac}
+      .panda-status.error{background:rgba(244,63,94,.18);color:#fca5a5}
+      .panda-actions{display:flex;gap:6px}
+      .panda-btn{all:unset;background:#1f2937;color:#e5e7eb;border:1px solid rgba(255,255,255,.08);padding:4px 8px;border-radius:8px;cursor:pointer;font-size:12px}
+      .panda-btn:hover{background:#111827}
+    </style>
+    <div class="panda-progress-panel" id="pandaProgress" style="display:none">
+      <div class="panda-progress-header">
+        <div>数据清洗进度<span id="pandaOverallStatus" class="panda-status running" style="display:none"></span></div>
+        <div class="panda-actions">
+          <button class="panda-btn" id="pandaToggle">隐藏</button>
+          <button class="panda-btn" id="pandaClose">关闭</button>
+        </div>
+      </div>
+      <div class="panda-progress-body">
+        <div class="panda-row">
+          <div class="panda-title">股票市场数据</div>
+          <div class="panda-bar"><div id="pandaStockFill" class="panda-fill"></div></div>
+          <div class="panda-meta" id="pandaStockMeta">等待中...</div>
+          <div style="height:6px"></div>
+          <div class="panda-bar"><div id="pandaStockFineFill" class="panda-fill" style="background:linear-gradient(90deg,#10b981,#f59e0b)"></div></div>
+          <div class="panda-meta" id="pandaStockFineMeta" style="opacity:.85">—</div>
+        </div>
+        <div class="panda-row">
+          <div class="panda-title">因子数据</div>
+          <div class="panda-bar"><div id="pandaFactorFill" class="panda-fill" style="background:linear-gradient(90deg,#06b6d4,#60a5fa)"></div></div>
+          <div class="panda-meta" id="pandaFactorMeta">等待中...</div>
+        </div>
+        <div class="panda-row" id="pandaError" style="display:none;color:#fca5a5;font-size:12px"></div>
+      </div>
+    </div>
+
+    <script>
+      (function(){
+        const stockUrl = '/datahub/api/v1/get_progress_stock_final';
+        const factorUrl = '/datahub/api/v1/get_progress_factor_final';
+        const panel = document.getElementById('pandaProgress');
+        const stockFill = document.getElementById('pandaStockFill');
+        const factorFill = document.getElementById('pandaFactorFill');
+        const stockFineFill = document.getElementById('pandaStockFineFill');
+        const stockFineMeta = document.getElementById('pandaStockFineMeta');
+        const stockMeta = document.getElementById('pandaStockMeta');
+        const factorMeta = document.getElementById('pandaFactorMeta');
+        const errorBox = document.getElementById('pandaError');
+        const overall = document.getElementById('pandaOverallStatus');
+
+        let collapsed = false;
+        let timer = null;
+
+        function fmt(p){return Math.max(0,Math.min(100, Number(p||0))).toFixed(0)+'%'}
+        function metaFrom(d){
+          const parts=[];
+          if(d.current_task) parts.push(d.current_task);
+          if(d.trading_days_processed!=null&&d.trading_days_total!=null){parts.push(`交易日 ${d.trading_days_processed}/${d.trading_days_total}`)}
+          if(d.processed_count!=null&&d.total_count!=null){parts.push(`计数 ${d.processed_count}/${d.total_count}`)}
+          if(d.current_date) parts.push(d.current_date);
+          if(d.batch_info) parts.push(d.batch_info);
+          if(d.data_source) parts.push(`源: ${d.data_source}`);
+          return parts.join(' · ')||'—';
+        }
+
+        async function fetchJson(url){
+          try{
+            const r = await fetch(url,{headers:{'Accept':'application/json'}});
+            if(!r.ok) throw new Error('HTTP '+r.status);
+            return await r.json();
+          }catch(e){ return {status:'error', error_message:String(e)} }
+        }
+
+        async function tick(){
+          const [s,f] = await Promise.all([fetchJson(stockUrl), fetchJson(factorUrl)]);
+          const anyActive = ['running','error'].includes(s.status)||['running','error'].includes(f.status)|| (s.progress_percent||0)>0 || (f.progress_percent||0)>0;
+          panel.style.display = anyActive ? 'block' : 'none';
+
+          stockFill.style.width = fmt(s.progress_percent);
+          factorFill.style.width = fmt(f.progress_percent);
+          
+          // 优化股票数据显示：如果completed但没有处理数据，显示提示
+          let stockMetaText = metaFrom(s);
+          if (s.status === 'completed' && s.trading_days_total === 0 && s.processed_count === 0) {
+            stockMetaText = '数据清洗已完成 · 交易日 0/0 · 计数 0/0';
+          }
+          stockMeta.textContent = stockMetaText;
+          
+          stockFineFill.style.width = fmt(s.stock_progress_percent);
+          stockFineMeta.textContent = s.last_message || (s.stock_total? `股票 ${s.stock_processed||0}/${s.stock_total}`:'—');
+          
+          // 优化因子数据显示
+          let factorMetaText = metaFrom(f);
+          if (f.status === 'completed' && (f.progress_percent||0) >= 100) {
+            factorMetaText = factorMetaText || '因子数据清洗已完成';
+          }
+          factorMeta.textContent = factorMetaText;
+
+          errorBox.style.display = s.status==='error' || f.status==='error' ? 'block':'none';
+          errorBox.textContent = s.status==='error' && s.error_message ? `股票: ${s.error_message}` : (f.status==='error' && f.error_message ? `因子: ${f.error_message}` : '');
+
+          const finalStatus = (st)=> st==='error'?'error':(st==='running'?'running':(st==='completed'?'completed':null));
+          const os = finalStatus(s.status)||finalStatus(f.status);
+          if(os){
+            overall.style.display='inline-block';
+            overall.className = 'panda-status '+os;
+            overall.textContent = os;
+          }else{
+            overall.style.display='none';
+          }
+        }
+
+        function start(){ if(timer) return; tick(); timer = setInterval(tick, 2000); }
+        function stop(){ if(timer){ clearInterval(timer); timer=null; } }
+
+        document.getElementById('pandaToggle').onclick = function(){
+          collapsed = !collapsed;
+          document.querySelector('.panda-progress-body').style.display = collapsed?'none':'block';
+          this.textContent = collapsed? '展开':'隐藏';
+        };
+        document.getElementById('pandaClose').onclick = function(){ stop(); panel.style.display='none'; };
+
+        // auto-start
+        start();
+        document.addEventListener('visibilitychange',()=>{ if(document.hidden) stop(); else start(); });
+      })();
+    </script>
+  </body></html>

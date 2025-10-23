@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import math
 
 
 from panda_common.handlers.database_handler import DatabaseHandler
@@ -23,7 +24,21 @@ from typing import Tuple, Optional
 # 全局变量，替代类实例变量
 _config = config
 _db_handler = DatabaseHandler(config)
-panda_data.init()
+
+# 延迟初始化 panda_data，避免导入时出错
+_panda_data_initialized = False
+
+def ensure_panda_data_initialized():
+    """确保 panda_data 已初始化"""
+    global _panda_data_initialized
+    if not _panda_data_initialized:
+        try:
+            panda_data.init()
+            _panda_data_initialized = True
+            logger.info("panda_data 初始化成功")
+        except Exception as e:
+            logger.warning(f"panda_data 初始化失败: {str(e)}，某些功能可能不可用")
+            # 不抛出异常，允许服务继续启动
 
 def validate_object_id(factor_id: str) -> ObjectId:
     """验证并转换ObjectId"""
@@ -62,6 +77,51 @@ def format_duration(seconds):
 
 def hello():
     return ResultData.success("hello")
+
+
+def sanitize_for_json(value):
+    """将数据中的 NaN/Inf 和 numpy 类型转为 JSON 兼容格式。
+
+    - 将 float('nan')、np.nan、正负无穷大 转为 None
+    - 将 numpy 数字类型转为 Python 原生类型
+    - 递归处理 list/dict/tuple
+    """
+    try:
+        # None / 基础不可变类型直接返回
+        if value is None or isinstance(value, (str, bool, int)):
+            return value
+
+        # 浮点数：处理 NaN/Inf
+        if isinstance(value, float):
+            if math.isnan(value) or math.isinf(value):
+                return None
+            return value
+
+        # numpy 数字类型
+        if isinstance(value, np.floating):
+            v = float(value)
+            if math.isnan(v) or math.isinf(v):
+                return None
+            return v
+        if isinstance(value, np.integer):
+            return int(value)
+
+        # 容器类型递归处理
+        if isinstance(value, dict):
+            return {k: sanitize_for_json(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [sanitize_for_json(v) for v in value]
+        if isinstance(value, tuple):
+            return [sanitize_for_json(v) for v in value]
+
+        # 其他类型保持原样（如需要可在此扩展）
+        return value
+    except Exception:
+        # 清理过程中出现异常则回退为可序列化字符串
+        try:
+            return str(value)
+        except Exception:
+            return None
 
 
 def get_user_factor_list(
@@ -559,7 +619,7 @@ def run_factor_analysis(factor_id: str,start_date:str,end_date:str,user_id:str,f
         # 获取因子值 - 使用处理后的日期格式
         start_date_formatted = start_date.replace("-", "") if "-" in start_date else start_date
         end_date_formatted = end_date.replace("-", "") if "-" in end_date else end_date
-        panda_data.init()
+        ensure_panda_data_initialized()
         df_factor = panda_data.get_custom_factor(
             factor_logger=logger,
             user_id=int(user_id),
@@ -1062,17 +1122,20 @@ def query_last_date_top_factor(task_id: str):
             logger.warning(f"未找到任务 {task_id} 的分析结果")
             return ResultData.fail("404", f"未找到任务 {task_id} 的分析结果")
         result.get("last_date_top_factor", [])
-        # 构造响应数据
+        # 构造响应数据，并进行 NaN/Inf 清理
         response = LastDateTopFactorResponse(
             task_id=task_id,
             last_date_top_factor=result.get("last_date_top_factor", [])
         )
 
+        data_dict = response.model_dump()
+        data_dict = sanitize_for_json(data_dict)
+
         logger.info(f"成功查询到任务 {task_id} 的最新日期因子值数据")
         return ResultData(
             code="200",
             message="查询成功",
-            data=response.model_dump()
+            data=data_dict
         )
 
     except Exception as e:

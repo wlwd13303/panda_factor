@@ -109,6 +109,11 @@ def ts_is_trading_day(date):
     bool: 如果是交易日返回 True，否则返回 False
     """
     try:
+        # 每次调用时都重新获取配置并设置token，确保使用最新的token
+        from panda_common.config import get_config
+        config = get_config()
+        ts.set_token(config['TS_TOKEN'])
+        
         # 获取指定日期的交易日历信息
         cal_df = ts.pro_api().query('trade_cal',
                             exchange='SSE',

@@ -11,6 +11,7 @@ from panda_data_hub.data.ricequant_stock_market_cleaner import RQStockMarketClea
 from panda_data_hub.data.ricequant_stocks_cleaner import RQStockCleaner
 from panda_data_hub.data.tushare_stocks_cleaner import TSStockCleaner
 from panda_data_hub.data.tushare_stock_market_cleaner import TSStockMarketCleaner
+from panda_data_hub.services.ts_financial_clean_service import FinancialCleanTSService
 # from panda_data_hub.data.xtquant_stock_market_cleaner import XTStockMarketCleaner
 # from panda_data_hub.data.xtquant_stocks_cleaner import XTStockCleaner
 
@@ -55,6 +56,21 @@ class DataScheduler:
         except Exception as e:
             logger.error(f"Error _process_data : {str(e)}")
     
+    def _process_financial_data(self):
+        """处理财务数据清洗和入库（每日更新最近2个季度）"""
+        logger.info("Processing financial data")
+        try:
+            data_source = config['DATAHUBSOURCE']
+            if data_source == 'tushare':
+                # 每日更新财务数据（最近2个季度）
+                financial_service = FinancialCleanTSService(self.config)
+                financial_service.financial_daily_update()
+                logger.info("Financial data daily update completed")
+            else:
+                logger.warning(f"Financial data update not supported for data source: {data_source}")
+        except Exception as e:
+            logger.error(f"Error _process_financial_data: {str(e)}")
+    
     def schedule_data(self):
         time = self.config["STOCKS_UPDATE_TIME"]
         hour, minute = time.split(":")
@@ -76,6 +92,27 @@ class DataScheduler:
         # self._process_data()
         logger.info(f"Scheduled Data")
     
+    def schedule_financial_data(self):
+        """调度财务数据更新任务"""
+        time = self.config.get("FINANCIAL_UPDATE_TIME", "16:30")
+        hour, minute = time.split(":")
+        trigger = CronTrigger(
+            minute=minute,
+            hour=hour,
+            day='*',
+            month='*',
+            day_of_week='*'
+        )
+        
+        # Add scheduled task for financial data
+        self.scheduler.add_job(
+            self._process_financial_data,
+            trigger=trigger,
+            id=f"financial_data_{datetime.datetime.now().strftime('%Y%m%d')}",
+            replace_existing=True
+        )
+        logger.info(f"Scheduled Financial Data update at {time}")
+    
     def stop(self):
         """Stop the scheduler"""
         self.scheduler.shutdown() 
@@ -84,3 +121,4 @@ class DataScheduler:
         """重新加载定时任务（用于配置变更后热更新）"""
         self.scheduler.remove_all_jobs()
         self.schedule_data()
+        self.schedule_financial_data()

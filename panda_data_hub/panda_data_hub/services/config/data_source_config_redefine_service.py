@@ -8,6 +8,7 @@ from panda_common.logger_config import logger
 from panda_data_hub.models.config_request import ConfigRequest
 from panda_common import config as common_config
 import importlib
+import tushare as ts
 
 modules_to_reload = [
     'panda_data_hub.routes.data_clean.factor_data_clean',
@@ -94,11 +95,58 @@ class DataSourceConfigRedefine(ABC):
                 f.write(content)
             # 原子替换原文件
             os.replace(temp_path, config_path)
+            logger.info("配置文件更新成功")
+            
+            # 6. 热加载配置到内存
+            self._reload_config()
+            
+            # 7. 重新设置数据源token
+            self._reload_data_source_token(requst)
             
         except Exception as e:
             if temp_path.exists():
                 temp_path.unlink()
             raise RuntimeError(f"配置文件更新失败: {e}")
+    
+    def _reload_config(self):
+        """重新加载配置到内存"""
+        try:
+            from panda_common.config import load_config
+            new_config = load_config()
+            
+            # 更新当前config对象的所有键值
+            common_config.config.clear()
+            common_config.config.update(new_config)
+            
+            logger.info("配置已热加载到内存")
+        except Exception as e:
+            logger.error(f"配置热加载失败: {str(e)}")
+            raise
+    
+    def _reload_data_source_token(self, request: ConfigRequest):
+        """重新设置数据源token"""
+        try:
+            if request.data_source == 'tushare' and request.admin_token:
+                # 重新设置tushare token
+                ts.set_token(request.admin_token)
+                logger.info(f"Tushare token已更新")
+                
+            elif request.data_source == 'ricequant' and request.m_user_name and request.m_password:
+                # 重新登录ricequant
+                try:
+                    import rqdatac
+                    rqdatac.init(request.m_user_name, request.m_password)
+                    logger.info(f"RiceQuant已重新登录")
+                except Exception as e:
+                    logger.warning(f"RiceQuant重新登录失败: {str(e)}")
+                    
+            elif request.data_source == 'xuntou' and request.admin_token:
+                # 讯投的token处理
+                logger.info(f"XunTou token已更新")
+                
+        except Exception as e:
+            logger.error(f"数据源token更新失败: {str(e)}")
+            raise
 
 
 
