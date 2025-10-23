@@ -9,17 +9,19 @@ UPDATE_TIME: '20:00'
 # 股票数据更新时间(每日)
 STOCKS_UPDATE_TIME: "20:00"
 # 因子数据更新时间(每日)
-FACTOR_UPDATE_TIME: "20:30"
+FACTOR_UPDATE_TIME: "21:00"
+# 财务数据更新时间(每日)
+FINANCIAL_UPDATE_TIME: "16:30"
 
 
 # 数据源
-DATASOURCE: tqsdk
-DATAHUBSOURCE: ""
+DATASOURCE: tushare
+DATAHUBSOURCE: "tushare"
 #米筐账号密码
 MUSER: ""
 MPASSWORD: ""
 # TUSHARE TOKEN
-TS_TOKEN: ""
+TS_TOKEN: "b572a68c0eadbc49db1a1867c319f6134fc6a3c1c94d820188b29ddd"
 # 讯投  TOKEN
 XT_TOKEN: ''
 # 数据源验证信息
@@ -41,7 +43,7 @@ MONGO_TYPE: "replica_set"
 MONGO_REPLICA_SET: "rs0"
 
 # OpenAI配置
-LLM_API_KEY: "这里填写你的KEY"
+LLM_API_KEY: "sk-49c405d635ed4944b1097902ff2a5882"
 LLM_MODEL: "deepseek-chat"
 LLM_BASE_URL: "https://api.deepseek.com/v1"
 
