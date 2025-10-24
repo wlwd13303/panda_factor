@@ -93,7 +93,7 @@ class FactorReader:
         
         # 财务字段列表（来自财务报表：利润表、资产负债表、现金流量表、财务指标）
         # 使用集中配置管理
-        from panda_common.config.financial_fields import ALL_FINANCIAL_FIELDS
+        from panda_common.fields.financial_fields import ALL_FINANCIAL_FIELDS
         financial_factors = [f.lower() for f in ALL_FINANCIAL_FIELDS]
         
         requested_base_factors = [f for f in factors if f in base_factors]

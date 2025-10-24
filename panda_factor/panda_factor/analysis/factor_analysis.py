@@ -164,8 +164,8 @@ def factor_analysis(df_factor: pd.DataFrame, params: Params, factor_id: str = ""
             df_factor['date'] = pd.to_datetime(df_factor['date'], format='%Y%m%d')
             
             # 按日期和股票排序（merge_asof要求）
-            df_k_data = df_k_data.sort_values(['symbol', 'date'])
-            df_factor = df_factor.sort_values(['symbol', 'date'])
+            df_k_data.sort_values(['date'],inplace=True)
+            df_factor.sort_values(['date'],inplace=True)
             
             # 使用 merge_asof 进行时间点合并（适用于PIT数据）
             # direction='backward' 表示使用最近的历史值
@@ -176,7 +176,7 @@ def factor_analysis(df_factor: pd.DataFrame, params: Params, factor_id: str = ""
                 by='symbol', 
                 direction='backward'
             )
-            
+            del df_k_data,df_factor
             logger.debug(msg=f"Merged data rows: {len(df)}")
             
             # 过滤掉因子值为空的行
