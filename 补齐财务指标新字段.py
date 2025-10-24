@@ -110,7 +110,7 @@ def main():
         )
         
         print("\n" + "=" * 70)
-        print("✅ 补齐完成！")
+        print("补齐完成！")
         print("=" * 70)
         print("\n你可以通过以下方式验证：")
         print("1. 访问 http://localhost:8080/data-statistics 查看统计")
@@ -118,7 +118,7 @@ def main():
         print("3. 在 MongoDB 中查询 financial_indicator 集合")
         
     except Exception as e:
-        print(f"\n❌ 补齐失败: {str(e)}")
+        print(f"\n补齐失败: {str(e)}")
         import traceback
         traceback.print_exc()
 

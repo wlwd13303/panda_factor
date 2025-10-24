@@ -180,7 +180,7 @@ def main():
         )
         
         print("\n" + "=" * 70)
-        print("✅ 部分更新完成！")
+        print("部分更新完成！")
         print("=" * 70)
         print(f"处理任务数: {result['processed']} / {result['total']}")
         print(f"更新模式: {result['mode']}")
@@ -208,7 +208,7 @@ def main():
                 for field in fields_to_update:
                     if field in df.columns:
                         has_data = df[field].notna().any()
-                        print(f"\n{field} 字段是否有数据: {'✅ 是' if has_data else '❌ 否'}")
+                        print(f"\n{field} 字段是否有数据: {'是' if has_data else '否'}")
             else:
                 print("未查询到数据")
         
@@ -219,7 +219,7 @@ def main():
         print("=" * 70)
         
     except Exception as e:
-        print(f"\n❌ 部分更新失败: {str(e)}")
+        print(f"\n部分更新失败: {str(e)}")
         import traceback
         traceback.print_exc()
 

@@ -110,7 +110,7 @@ class FinancialCleanTSService(ABC):
     
     def financial_history_clean(self, start_date, end_date, symbols=None, data_types=None):
         """
-        历史财务数据清洗
+        历史财务数据清洗（旧接口，保持兼容性）
         
         Args:
             start_date: 开始日期 YYYYMMDD
@@ -119,17 +119,48 @@ class FinancialCleanTSService(ABC):
             data_types: 数据类型列表，如：['income', 'balance', 'cashflow', 'indicator']
                        如果为None，则清洗所有类型
         """
-        logger.info("开始历史财务数据清洗")
+        logger.info(f"📅 历史数据清洗: {start_date} ~ {end_date}")
+        # 转换为报告期范围格式
+        periods = {"start": start_date, "end": end_date}
+        return self.clean_financial_by_periods(symbols, periods, data_types)
+    
+    def clean_financial_by_periods(self, symbols=None, periods=None, data_types=None, use_vip=None):
+        """
+        按报告期清洗财务数据（支持VIP接口）
         
-        # 获取股票列表
-        ts_symbols = self.get_stocks_list(symbols)
-        logger.info(f"需要处理的股票数量: {len(ts_symbols)}")
+        Args:
+            symbols: 股票代码列表（pandas格式），如：['000001.SZ', '600000.SH']
+                     None表示全市场
+            periods: 报告期，支持以下格式：
+                     - None: 使用最新报告期
+                     - str: 单个报告期，如："20240930"
+                     - list: 报告期列表，如：["20240331", "20240630"]
+                     - dict: 报告期范围，如：{"start": "20240331", "end": "20240930"}
+            data_types: 数据类型列表，如：['income', 'balance', 'cashflow', 'indicator']
+                       如果为None，则清洗所有类型
+            use_vip: 是否强制使用VIP接口，None表示自动判断
+        """
+        # 获取股票列表（如果指定了股票）
+        ts_symbols = self.get_stocks_list(symbols) if symbols else None
+        
+        # 判断是否使用VIP接口
+        if ts_symbols is None:
+            stock_info = "全市场"
+            stock_count = "全部"
+        else:
+            stock_info = f"{len(ts_symbols)}只股票"
+            stock_count = len(ts_symbols)
         
         # 默认清洗所有类型
         if data_types is None:
             data_types = ['income', 'balance', 'cashflow', 'indicator']
         
         total_types = len(data_types)
+        
+        # 解析报告期信息用于日志
+        periods_info = self._format_periods_info(periods)
+        
+        logger.info(f"🚀 开始财务数据清洗任务 - {stock_info} | {periods_info} | {total_types}种数据类型")
         
         # 发送初始进度
         if self.progress_callback:
@@ -139,14 +170,12 @@ class FinancialCleanTSService(ABC):
                 "processed_count": 0,
                 "total_count": total_types,
                 "current_type": "",
-                "batch_info": f"总共需要处理 {total_types} 种数据类型，{len(ts_symbols)} 只股票",
+                "batch_info": f"{total_types}种数据类型 | {stock_info}",
             })
         
         # 逐个类型处理
         for idx, data_type in enumerate(data_types):
             try:
-                logger.info(f"开始处理 {data_type} 数据 ({idx+1}/{total_types})")
-                
                 if self.progress_callback:
                     self.progress_callback({
                         "progress_percent": int((idx / total_types) * 100),
@@ -154,30 +183,29 @@ class FinancialCleanTSService(ABC):
                         "processed_count": idx,
                         "total_count": total_types,
                         "current_type": data_type,
-                        "batch_info": f"处理 {data_type} - {len(ts_symbols)} 只股票",
+                        "batch_info": f"{data_type} - {stock_info}",
                     })
                 
+                # 使用新的清洗方法
                 if data_type == 'income':
-                    self.cleaner.clean_financial_income(ts_symbols, start_date, end_date)
+                    result = self.cleaner.clean_financial_income(ts_symbols, periods, use_vip)
                 elif data_type == 'balance':
-                    self.cleaner.clean_financial_balance(ts_symbols, start_date, end_date)
+                    result = self.cleaner.clean_financial_balance(ts_symbols, periods, use_vip)
                 elif data_type == 'cashflow':
-                    self.cleaner.clean_financial_cashflow(ts_symbols, start_date, end_date)
+                    result = self.cleaner.clean_financial_cashflow(ts_symbols, periods, use_vip)
                 elif data_type == 'indicator':
-                    self.cleaner.clean_financial_indicator(ts_symbols, start_date, end_date)
+                    result = self.cleaner.clean_financial_indicator(ts_symbols, periods, use_vip)
                 else:
-                    logger.warning(f"未知的数据类型: {data_type}")
+                    logger.warning(f"❓ 未知的数据类型: {data_type}")
                     continue
                 
-                logger.info(f"完成处理 {data_type} 数据")
-                
             except Exception as e:
-                logger.error(f"处理 {data_type} 数据失败: {str(e)}\n{traceback.format_exc()}")
+                logger.error(f"处理 {data_type} 数据失败: {str(e)}")
                 
                 if self.progress_callback:
                     self.progress_callback({
                         "current_task": f"处理 {data_type} 数据时出现错误",
-                        "error_message": f"处理 {data_type} 失败: {str(e)[:100]}...",
+                        "error_message": f"{data_type}失败: {str(e)[:100]}",
                     })
         
         # 发送完成状态
@@ -188,11 +216,27 @@ class FinancialCleanTSService(ABC):
                 "processed_count": total_types,
                 "total_count": total_types,
                 "current_type": "",
-                "batch_info": f"成功处理了 {total_types} 种数据类型",
+                "batch_info": f"完成 {total_types} 种数据类型",
                 "status": "completed"
             })
         
-        logger.info("历史财务数据清洗完成")
+        logger.info(f"🎉 财务数据清洗任务完成")
+    
+    def _format_periods_info(self, periods):
+        """格式化报告期信息用于日志"""
+        if periods is None:
+            return "最新报告期"
+        elif isinstance(periods, str):
+            return f"报告期{periods}"
+        elif isinstance(periods, list):
+            if len(periods) == 1:
+                return f"报告期{periods[0]}"
+            else:
+                return f"{len(periods)}个报告期"
+        elif isinstance(periods, dict):
+            return f"报告期{periods.get('start')}-{periods.get('end')}"
+        else:
+            return "未知报告期"
     
     def financial_daily_update(self, symbols=None, data_types=None):
         """
@@ -202,15 +246,16 @@ class FinancialCleanTSService(ABC):
             symbols: 股票代码列表（pandas格式），如果为None则更新所有股票
             data_types: 数据类型列表，如果为None则更新所有类型
         """
-        logger.info("开始每日财务数据更新")
+        logger.info("📅 开始每日财务数据更新")
         
         # 获取最近2个季度
         recent_quarters = self.get_recent_quarters(num_quarters=2)
-        logger.info(f"需要更新的季度: {recent_quarters}")
         
         if not recent_quarters:
-            logger.warning("未找到需要更新的季度")
+            logger.warning("⚠️  未找到需要更新的季度")
             return
+        
+        logger.info(f"📋 更新季度: {', '.join(recent_quarters)}")
         
         # 使用最早和最晚的季度作为日期范围
         start_date = recent_quarters[-1]  # 最早的季度
@@ -219,5 +264,5 @@ class FinancialCleanTSService(ABC):
         # 调用历史清洗方法
         self.financial_history_clean(start_date, end_date, symbols, data_types)
         
-        logger.info("每日财务数据更新完成")
+        logger.info("🎉 每日财务数据更新完成")
 

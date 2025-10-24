@@ -39,3 +39,22 @@ export const updateDataSourceConfig = (config: any) => {
   return axios.post('/datahub/api/v1/config_redefine_data_source', config)
 }
 
+// 财务数据清洗相关接口
+
+// 获取财务数据清洗进度
+export const getFinancialProgress = () => {
+  return axios.get<any, ProgressData>('/datahub/api/v1/get_financial_progress')
+}
+
+// 按报告期清洗财务数据
+export const startFinancialClean = (params: {
+  periods?: string              // 报告期（单个或多个，逗号分隔）
+  period_start?: string         // 报告期范围开始
+  period_end?: string           // 报告期范围结束
+  symbols?: string              // 股票代码（逗号分隔）
+  data_types?: string           // 数据类型（逗号分隔）
+  use_vip?: boolean             // 是否使用VIP接口
+}) => {
+  return axios.post('/datahub/api/v1/clean_financial_by_periods', null, { params })
+}
+

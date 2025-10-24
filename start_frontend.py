@@ -39,7 +39,7 @@ def main():
     frontend_dir = Path(__file__).parent / "panda_web_frontend"
     
     if not frontend_dir.exists():
-        print(f"❌ 前端目录不存在: {frontend_dir}")
+        print(f"前端目录不存在: {frontend_dir}")
         sys.exit(1)
     
     # 检查Node.js和npm
@@ -48,13 +48,13 @@ def main():
     npm_path = check_npm()
     
     if not node_path:
-        print("\n❌ 未找到Node.js!")
+        print("\n未找到Node.js!")
         print("请先安装Node.js (推荐版本 >= 18)")
         print("下载地址: https://nodejs.org/")
         sys.exit(1)
     
     if not npm_path:
-        print("\n❌ 未找到npm!")
+        print("\n未找到npm!")
         print("npm通常随Node.js一起安装")
         print("请重新安装Node.js: https://nodejs.org/")
         sys.exit(1)
@@ -67,8 +67,8 @@ def main():
         npm_version = subprocess.check_output([npm_path, "--version"], 
                                              stderr=subprocess.STDOUT,
                                              text=True).strip()
-        print(f"✅ Node.js: {node_version}")
-        print(f"✅ npm: {npm_version}")
+        print(f"Node.js: {node_version}")
+        print(f"npm: {npm_version}")
     except subprocess.CalledProcessError as e:
         print(f"⚠️  无法获取版本信息: {e}")
     
@@ -95,9 +95,9 @@ def main():
                           cwd=frontend_dir, 
                           check=True,
                           shell=sys.platform == "win32")
-            print("✅ 依赖安装完成!")
+            print("依赖安装完成!")
         except subprocess.CalledProcessError as e:
-            print(f"❌ 依赖安装失败: {e}")
+            print(f"依赖安装失败: {e}")
             print("\n💡 尝试手动安装:")
             print(f"   cd {frontend_dir}")
             print("   npm install")
@@ -116,9 +116,9 @@ VITE_LLM_API_BASE_URL=http://localhost:8111
     # 始终更新环境变量文件以确保端口正确
     env_file.write_text(env_content, encoding='utf-8')
     if not env_file.exists():
-        print("✅ 已创建 .env.development 文件")
+        print("已创建 .env.development 文件")
     else:
-        print("✅ 已更新 .env.development 文件（端口: 8080/8111）")
+        print("已更新 .env.development 文件（端口: 8080/8111）")
     
     # 启动开发服务器
     print("\n🚀 启动React开发服务器...")
@@ -140,13 +140,13 @@ VITE_LLM_API_BASE_URL=http://localhost:8111
     except KeyboardInterrupt:
         print("\n\n👋 开发服务器已停止")
     except subprocess.CalledProcessError as e:
-        print(f"\n❌ 启动失败: {e}")
+        print(f"\n启动失败: {e}")
         print("\n💡 尝试手动启动:")
         print(f"   cd {frontend_dir}")
         print("   npm run dev")
         sys.exit(1)
     except FileNotFoundError as e:
-        print(f"\n❌ 找不到命令: {e}")
+        print(f"\n找不到命令: {e}")
         print(f"npm路径: {npm_path}")
         print("\n💡 请检查Node.js是否正确安装")
         sys.exit(1)

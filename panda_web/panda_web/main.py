@@ -290,7 +290,7 @@ async def navigation_home():
             </div>
             
             <div class="status-bar">
-                <div class="status-title" style="cursor: pointer;" title="点击刷新状态">✅ 系统状态 🔄</div>
+                <div class="status-title" style="cursor: pointer;" title="点击刷新状态">系统状态 🔄</div>
                 <div class="status-info" id="systemStatus">
                     <span class="loading">正在检测服务状态...</span>
                 </div>

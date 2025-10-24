@@ -164,6 +164,7 @@ class MacroFactor:
 
     # Factor name mapping
     FACTOR_MAP = {
+        # Market data factors
         'price': 'close',
         'volume': 'volume',
         'open': 'open',
@@ -174,6 +175,22 @@ class MacroFactor:
         'returns': 'returns',
         'turnover': 'turnover',
         'market_cap': 'market_cap',
+        
+        # Financial indicator factors
+        'qroe': 'q_roe',
+        'q_roe': 'q_roe',
+        'qdtroe': 'q_dt_roe',
+        'q_dt_roe': 'q_dt_roe',
+        'roe': 'roe',
+        'roe_waa': 'roe_waa',
+        'roe_dt': 'roe_dt',
+        'roa': 'roa',
+        'gross_margin': 'gross_margin',
+        'netprofit_margin': 'netprofit_margin',
+        'debt_to_assets': 'debt_to_assets',
+        'current_ratio': 'current_ratio',
+        'quick_ratio': 'quick_ratio',
+        
         # Add uppercase version
         'PRICE': 'close',
         'VOLUME': 'volume',
@@ -185,6 +202,20 @@ class MacroFactor:
         'RETURNS': 'returns',
         'TURNOVER': 'turnover',
         'MARKET_CAP': 'market_cap',
+        'QROE': 'q_roe',
+        'Q_ROE': 'q_roe',
+        'QDTROE': 'q_dt_roe',
+        'Q_DT_ROE': 'q_dt_roe',
+        'ROE': 'roe',
+        'ROE_WAA': 'roe_waa',
+        'ROE_DT': 'roe_dt',
+        'ROA': 'roa',
+        'GROSS_MARGIN': 'gross_margin',
+        'NETPROFIT_MARGIN': 'netprofit_margin',
+        'DEBT_TO_ASSETS': 'debt_to_assets',
+        'CURRENT_RATIO': 'current_ratio',
+        'QUICK_RATIO': 'quick_ratio',
+        
         # Add mixed case version
         'Price': 'close',
         'Volume': 'volume',
@@ -196,6 +227,8 @@ class MacroFactor:
         'Returns': 'returns',
         'Turnover': 'turnover',
         'Market_Cap': 'market_cap',
+        'Qroe': 'q_roe',
+        'Q_Roe': 'q_roe',
     }
 
     # Allowed built-in functions and modules
@@ -400,16 +433,19 @@ class MacroFactor:
             variables = set(re.findall(pattern, formula))
 
             # Remove all built-in functions and attribute names
-            variables = variables - FactorConstants.ALLOWED_BUILTINS - set(FactorConstants.ALLOWED_ATTRIBUTES.keys())
+            variables = variables - self.ALLOWED_BUILTINS - set(self.ALLOWED_ATTRIBUTES.keys())
 
             factor_names = set()
             for var in variables:
-                if var.upper() in FactorConstants.FACTOR_MAP:
-                    factor_names.add(FactorConstants.FACTOR_MAP[var.upper()])
-                elif var.lower() in FactorConstants.FACTOR_MAP:
-                    factor_names.add(FactorConstants.FACTOR_MAP[var.lower()])
-                elif var in FactorConstants.FACTOR_MAP:
-                    factor_names.add(FactorConstants.FACTOR_MAP[var])
+                # Check uppercase
+                if var.upper() in self.FACTOR_MAP:
+                    factor_names.add(self.FACTOR_MAP[var.upper()])
+                # Check lowercase
+                elif var.lower() in self.FACTOR_MAP:
+                    factor_names.add(self.FACTOR_MAP[var.lower()])
+                # Check original case
+                elif var in self.FACTOR_MAP:
+                    factor_names.add(self.FACTOR_MAP[var])
 
             if not factor_names:
                 print(f"No valid factors found in formula. Variables found: {variables}")

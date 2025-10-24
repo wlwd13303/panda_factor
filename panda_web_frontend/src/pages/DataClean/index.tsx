@@ -11,6 +11,8 @@ import {
   message,
   Divider,
   Tag,
+  Radio,
+  Input,
 } from 'antd'
 import { PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import dayjs, { Dayjs } from 'dayjs'
@@ -18,8 +20,10 @@ import ProgressPanel from '@/components/ProgressPanel'
 import {
   getStockProgress,
   getFactorProgress,
+  getFinancialProgress,
   startStockClean,
   startFactorClean,
+  startFinancialClean,
   getDataSourceConfig,
   updateDataSourceConfig,
 } from '@/api/dataClean'
@@ -27,15 +31,19 @@ import type { ProgressData, DataSourceConfig } from '@/types'
 import './index.css'
 
 const { RangePicker } = DatePicker
+const { TextArea } = Input
 
 const DataClean = () => {
   const [stockForm] = Form.useForm()
   const [factorForm] = Form.useForm()
+  const [financialForm] = Form.useForm()
 
   const [stockProgress, setStockProgress] = useState<ProgressData | null>(null)
   const [factorProgress, setFactorProgress] = useState<ProgressData | null>(null)
+  const [financialProgress, setFinancialProgress] = useState<ProgressData | null>(null)
   const [stockLoading, setStockLoading] = useState(false)
   const [factorLoading, setFactorLoading] = useState(false)
+  const [financialLoading, setFinancialLoading] = useState(false)
   const [config, setConfig] = useState<DataSourceConfig | null>(null)
 
   // 轮询进度
@@ -52,12 +60,14 @@ const DataClean = () => {
 
   const loadProgress = async () => {
     try {
-      const [stock, factor] = await Promise.all([
+      const [stock, factor, financial] = await Promise.all([
         getStockProgress(),
         getFactorProgress(),
+        getFinancialProgress(),
       ])
       setStockProgress(stock)
       setFactorProgress(factor)
+      setFinancialProgress(financial)
     } catch (error) {
       console.error('Failed to load progress:', error)
     }
@@ -141,6 +151,86 @@ const DataClean = () => {
     // } catch (error: any) {
     //   message.error(error.message || '保存失败')
     // }
+  }
+
+  const handleStartFinancialClean = async () => {
+    try {
+      const values = await financialForm.validateFields()
+      
+      setFinancialLoading(true)
+      
+      // 构建请求参数
+      const params: any = {}
+      
+      // 处理报告期参数
+      if (values.periodMode === 'single') {
+        // 单个报告期或最新报告期
+        if (values.singlePeriod) {
+          params.periods = values.singlePeriod
+        }
+        // 如果没有选择，后端会自动使用最新报告期
+      } else if (values.periodMode === 'range') {
+        // 报告期范围
+        if (values.periodRange && values.periodRange.length === 2) {
+          params.period_start = values.periodRange[0]
+          params.period_end = values.periodRange[1]
+        }
+      }
+      
+      // 处理股票范围参数
+      if (values.stockScope === 'specific' && values.symbols) {
+        params.symbols = values.symbols.trim()
+      }
+      // 如果是全市场，不传symbols参数
+      
+      // 处理数据类型参数
+      if (values.dataTypes && values.dataTypes.length > 0) {
+        params.data_types = values.dataTypes.join(',')
+      }
+      
+      await startFinancialClean(params)
+      
+      message.success('财务数据清洗任务已启动')
+      setTimeout(loadProgress, 1000)
+    } catch (error: any) {
+      message.error(error.message || '启动失败')
+    } finally {
+      setFinancialLoading(false)
+    }
+  }
+
+  // 生成报告期选项（最近8个季度）
+  const generatePeriodOptions = () => {
+    const options = []
+    const now = dayjs()
+    const currentYear = now.year()
+    const currentMonth = now.month() + 1
+    
+    // 定义季度结束月份和日期
+    const quarters = [
+      { month: 3, day: 31, label: 'Q1' },
+      { month: 6, day: 30, label: 'Q2' },
+      { month: 9, day: 30, label: 'Q3' },
+      { month: 12, day: 31, label: 'Q4' },
+    ]
+    
+    let count = 0
+    for (let year = currentYear; year >= currentYear - 2 && count < 8; year--) {
+      for (let i = quarters.length - 1; i >= 0 && count < 8; i--) {
+        const q = quarters[i]
+        const periodDate = dayjs(`${year}-${q.month}-${q.day}`)
+        
+        // 只显示已经过去的季度
+        if (periodDate.isBefore(now)) {
+          const value = `${year}${q.month.toString().padStart(2, '0')}${q.day.toString().padStart(2, '0')}`
+          const label = `${year}${q.label} (${value})`
+          options.push({ label, value })
+          count++
+        }
+      }
+    }
+    
+    return options
   }
 
   return (
@@ -285,6 +375,150 @@ const DataClean = () => {
               <ProgressPanel
                 title="清洗进度"
                 data={factorProgress}
+                loading={false}
+              />
+            </Card>
+          </Col>
+
+          {/* 财务数据清洗 */}
+          <Col xs={24} lg={12}>
+            <Card
+              title="财务数据清洗"
+              extra={
+                <Button
+                  icon={<ReloadOutlined />}
+                  onClick={loadProgress}
+                  size="small"
+                >
+                  刷新
+                </Button>
+              }
+            >
+              <Form
+                form={financialForm}
+                layout="vertical"
+                initialValues={{
+                  periodMode: 'single',
+                  singlePeriod: undefined,
+                  stockScope: 'all',
+                  dataTypes: ['income', 'balance', 'cashflow', 'indicator'],
+                }}
+              >
+                <Form.Item
+                  label="报告期选择"
+                  name="periodMode"
+                  rules={[{ required: true }]}
+                >
+                  <Radio.Group>
+                    <Radio value="single">单个报告期</Radio>
+                    <Radio value="range">报告期范围</Radio>
+                  </Radio.Group>
+                </Form.Item>
+
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.periodMode !== curr.periodMode}>
+                  {({ getFieldValue }) => {
+                    const mode = getFieldValue('periodMode')
+                    if (mode === 'single') {
+                      return (
+                        <Form.Item
+                          label="报告期"
+                          name="singlePeriod"
+                          tooltip="不选择则默认使用最新报告期"
+                        >
+                          <Select
+                            placeholder="选择报告期（默认最新）"
+                            allowClear
+                            options={generatePeriodOptions()}
+                          />
+                        </Form.Item>
+                      )
+                    } else {
+                      return (
+                        <Form.Item
+                          label="报告期范围"
+                          name="periodRange"
+                          rules={[{ required: true, message: '请选择报告期范围' }]}
+                        >
+                          <Select
+                            mode="multiple"
+                            placeholder="选择起始和结束报告期"
+                            maxTagCount={2}
+                            options={generatePeriodOptions()}
+                          />
+                        </Form.Item>
+                      )
+                    }
+                  }}
+                </Form.Item>
+
+                <Form.Item
+                  label="股票范围"
+                  name="stockScope"
+                  rules={[{ required: true }]}
+                >
+                  <Radio.Group>
+                    <Radio value="all">全市场</Radio>
+                    <Radio value="specific">指定股票</Radio>
+                  </Radio.Group>
+                </Form.Item>
+
+                <Form.Item noStyle shouldUpdate={(prev, curr) => prev.stockScope !== curr.stockScope}>
+                  {({ getFieldValue }) => {
+                    const scope = getFieldValue('stockScope')
+                    if (scope === 'specific') {
+                      return (
+                        <Form.Item
+                          label="股票代码"
+                          name="symbols"
+                          rules={[{ required: true, message: '请输入股票代码' }]}
+                          tooltip="多个股票用逗号分隔，如：000001.SZ,600519.SH。超过50只建议使用全市场模式"
+                        >
+                          <TextArea
+                            placeholder="000001.SZ,600519.SH"
+                            rows={2}
+                          />
+                        </Form.Item>
+                      )
+                    }
+                    return null
+                  }}
+                </Form.Item>
+
+                <Form.Item
+                  label="数据类型"
+                  name="dataTypes"
+                  rules={[{ required: true, message: '请选择至少一种数据类型' }]}
+                >
+                  <Select
+                    mode="multiple"
+                    placeholder="选择数据类型"
+                    options={[
+                      { label: '利润表', value: 'income' },
+                      { label: '资产负债表', value: 'balance' },
+                      { label: '现金流量表', value: 'cashflow' },
+                      { label: '财务指标', value: 'indicator' },
+                    ]}
+                  />
+                </Form.Item>
+
+                <Form.Item>
+                  <Button
+                    type="primary"
+                    icon={<PlayCircleOutlined />}
+                    onClick={handleStartFinancialClean}
+                    loading={financialLoading}
+                    block
+                  >
+                    启动清洗
+                  </Button>
+                </Form.Item>
+              </Form>
+
+              <Divider />
+
+              <ProgressPanel
+                title="清洗进度"
+                data={financialProgress}
                 loading={false}
               />
             </Card>

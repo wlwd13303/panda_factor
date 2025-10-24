@@ -3,6 +3,7 @@
 class FactorConstants:
     # Factor name mapping
     FACTOR_MAP = {
+        # Market data factors
         'price': 'close',
         'volume': 'volume',
         'open': 'open',
@@ -13,6 +14,21 @@ class FactorConstants:
         'returns': 'returns',
         'turnover': 'turnover',
         'market_cap': 'market_cap',
+        
+        # Financial indicator factors
+        'qroe': 'q_roe',
+        'q_roe': 'q_roe',
+        'qdtroe': 'q_dt_roe',
+        'q_dt_roe': 'q_dt_roe',
+        'roe': 'roe',
+        'roe_waa': 'roe_waa',
+        'roe_dt': 'roe_dt',
+        'roa': 'roa',
+        'gross_margin': 'gross_margin',
+        'netprofit_margin': 'netprofit_margin',
+        'debt_to_assets': 'debt_to_assets',
+        'current_ratio': 'current_ratio',
+        'quick_ratio': 'quick_ratio',
     }
 
     # Add uppercase and mixed case versions

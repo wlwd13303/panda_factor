@@ -159,11 +159,34 @@ def factor_analysis(df_factor: pd.DataFrame, params: Params, factor_id: str = ""
         # Merge data
         logger.debug(msg="3. Starting to merge data")
         try:
-            df = pd.merge(df_k_data, df_factor, on=['date', 'symbol'], how='left')
-            print(len(df))
-            df['date'] = pd.to_datetime(df['date'], format='%Y%m%d')
+            # 转换日期格式以便排序和合并
+            df_k_data['date'] = pd.to_datetime(df_k_data['date'], format='%Y%m%d')
+            df_factor['date'] = pd.to_datetime(df_factor['date'], format='%Y%m%d')
+            
+            # 按日期和股票排序（merge_asof要求）
+            df_k_data = df_k_data.sort_values(['symbol', 'date'])
+            df_factor = df_factor.sort_values(['symbol', 'date'])
+            
+            # 使用 merge_asof 进行时间点合并（适用于PIT数据）
+            # direction='backward' 表示使用最近的历史值
+            df = pd.merge_asof(
+                df_k_data, 
+                df_factor, 
+                on='date', 
+                by='symbol', 
+                direction='backward'
+            )
+            
+            logger.debug(msg=f"Merged data rows: {len(df)}")
+            
+            # 过滤掉因子值为空的行
             df = df[df[factor_list].notna().all(axis=1)]
+            logger.debug(msg=f"After filtering null factors: {len(df)}")
+            
+            # 过滤掉收益率为空的行
             df = df[df[f'{params.adjustment_cycle}day_return'].notna()]
+            logger.debug(msg=f"After filtering null returns: {len(df)}")
+            
         except Exception as e:
             error_msg = f"merge data failed: {str(e)}"
             logger.error(msg=error_msg)

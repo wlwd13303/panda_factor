@@ -391,12 +391,19 @@ class FactorUtils:
 
     @staticmethod
     def REF(S: pd.Series, N=1) -> pd.Series:
-        """Shift entire series by N periods (generates NAN), preserving index"""
+        """Shift entire series by N periods (generates NAN), preserving index
+        
+        For multi-index data (date, symbol), shifts are done within each symbol group.
+        """
         # Handle FactorSeries type
         if hasattr(S, 'series'):
             S = S.series
-
-        return S.shift(N)
+        
+        # If the index is a MultiIndex with 'symbol' level, group by symbol
+        if isinstance(S.index, pd.MultiIndex) and 'symbol' in S.index.names:
+            return S.groupby(level='symbol').shift(N)
+        else:
+            return S.shift(N)
 
     @staticmethod
     def DIFF(S: pd.Series, N=1) -> pd.Series:

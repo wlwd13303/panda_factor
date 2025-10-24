@@ -198,7 +198,7 @@ def run_performance_test(
     avg_improvement = sum(result['improvement'] for result in results) / len(results)
 
     if avg_improvement > 20:
-        print("✅ The partitioned reader shows significant performance improvements.")
+        print("The partitioned reader shows significant performance improvements.")
         print("   Recommendation: Use the partitioned reader for all queries.")
         print("\n   To use the partitioned reader in your code:")
         print("   ```python")
@@ -209,7 +209,7 @@ def run_performance_test(
         print("   panda_data.switch_to_partitioned_reader()")
         print("   ```")
     elif avg_improvement > 5:
-        print("✅ The partitioned reader shows moderate performance improvements.")
+        print("The partitioned reader shows moderate performance improvements.")
         print("   Recommendation: Use the partitioned reader for large queries.")
         print("   For small queries, the standard reader may be sufficient.")
     else:

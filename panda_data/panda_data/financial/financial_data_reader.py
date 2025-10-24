@@ -89,7 +89,7 @@ class FinancialDataReader:
         projection = None
         if fields:
             # 基础字段必须包含
-            base_fields = ['symbol', 'end_date', 'ann_date', 'report_type', 'update_flag']
+            base_fields = ['symbol', 'end_date', 'ann_date']
             all_fields = list(set(base_fields + fields))
             projection = {field: 1 for field in all_fields}
             projection['_id'] = 0

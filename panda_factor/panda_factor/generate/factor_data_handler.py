@@ -161,8 +161,9 @@ class FactorDataHandler:
             # Clean and prepare DataFrame
             df_all = df_all.loc[:, ~df_all.columns.duplicated()]  # Drop duplicate columns
 
-            # Set index
+            # Sort by symbol and date first (critical for REF function to work correctly)
             if 'date' in df_all.columns and 'symbol' in df_all.columns:
+                df_all = df_all.sort_values(['symbol', 'date'])
                 df_all = df_all.set_index(['date', 'symbol'])
             else:
                 logger.error("Required columns 'date' and 'symbol' not found in data")
@@ -176,8 +177,12 @@ class FactorDataHandler:
 
             for factor_name in required_factors:
                 if factor_name in df_all.columns:
-                    factor_data[factor_name] = pd.Series(df_all[factor_name])
-                    logger.info(f"Factor {factor_name} loaded into memory")
+                    # Create Series with proper MultiIndex
+                    series = pd.Series(df_all[factor_name])
+                    # Ensure the series is sorted by symbol, then date for REF to work properly
+                    series = series.sort_index(level=['symbol', 'date'])
+                    factor_data[factor_name] = series
+                    logger.info(f"Factor {factor_name} loaded into memory, shape: {series.shape}")
                 else:
                     logger.error(f"Factor {factor_name} not found in retrieved data")
                     missing_factors.append(factor_name)
