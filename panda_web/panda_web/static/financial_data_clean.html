@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>财务数据清洗 - PandaAI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .back-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-btn:hover {
+            background: #5568d3;
+        }
+
+        .info-banner {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            border-left: 4px solid #2196f3;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: start;
+        }
+
+        .info-banner .icon {
+            font-size: 24px;
+            margin-right: 15px;
+        }
+
+        .info-banner .content {
+            flex: 1;
+        }
+
+        .info-banner h3 {
+            margin-bottom: 8px;
+            color: #1565c0;
+            font-size: 16px;
+        }
+
+        .info-banner p {
+            color: #1976d2;
+            font-size: 14px;
+            line-height: 1.6;
+            margin: 4px 0;
+        }
+
+        .section {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 12px;
+            margin-bottom: 25px;
+        }
+
+        .section-title {
+            font-size: 1.3rem;
+            margin-bottom: 20px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .form-group input[type="date"] {
+            width: 100%;
+            max-width: 300px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .checkbox-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .checkbox-item:hover {
+            border-color: #667eea;
+            background: #f5f7ff;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        .checkbox-item input[type="checkbox"]:checked + label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .checkbox-item label {
+            cursor: pointer;
+            flex: 1;
+            font-size: 14px;
+        }
+
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .radio-item:hover {
+            border-color: #667eea;
+        }
+
+        .radio-item input[type="radio"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .radio-item input[type="radio"]:checked + label {
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .radio-item label {
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .stocks-input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+
+        .stocks-input:disabled {
+            background: #f5f5f5;
+            color: #999;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #333;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .progress-section {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            margin-top: 25px;
+            border: 2px solid #e0e0e0;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .progress-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .status-badge {
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-idle {
+            background: #e0e0e0;
+            color: #666;
+        }
+
+        .status-running {
+            background: #e3f2fd;
+            color: #1976d2;
+            animation: pulse 2s infinite;
+        }
+
+        .status-completed {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .status-error {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 30px;
+            background: #f0f0f0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea, #764ba2);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .progress-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .info-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 15px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .error-message {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            color: #c62828;
+        }
+
+        .helper-text {
+            font-size: 12px;
+            color: #666;
+            margin-top: 8px;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💰 财务数据清洗</h1>
+            <a href="/" class="back-btn">← 返回首页</a>
+        </div>
+
+        <!-- 说明信息 -->
+        <div class="info-banner">
+            <div class="icon">💡</div>
+            <div class="content">
+                <h3>财务数据清洗说明（已优化VIP接口支持）</h3>
+                <p><strong>数据类型：</strong>财务指标、利润表、资产负债表、现金流量表</p>
+                <p><strong>数据频率：</strong>按季度/年度发布（Q1: 3月31日, Q2: 6月30日, Q3: 9月30日, Q4: 12月31日）</p>
+                <p><strong>智能优化：</strong>全市场模式自动使用VIP接口，效率提升100倍！指定股票使用普通接口</p>
+                <p><strong>建议操作：</strong>使用"报告期模式"按季度更新，快速高效</p>
+            </div>
+        </div>
+
+        <!-- 报告期选择 -->
+        <div class="section">
+            <div class="section-title">
+                <span>📅</span>
+                <span>报告期选择（推荐）</span>
+            </div>
+            <div class="form-group">
+                <div class="radio-group">
+                    <div class="radio-item">
+                        <input type="radio" id="mode_period" name="date_mode" value="period" checked>
+                        <label for="mode_period">按报告期（推荐）</label>
+                    </div>
+                    <div class="radio-item">
+                        <input type="radio" id="mode_date" name="date_mode" value="date">
+                        <label for="mode_date">按日期范围</label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 报告期模式 -->
+            <div id="periodModeSection">
+                <div class="form-group">
+                    <div class="radio-group">
+                        <div class="radio-item">
+                            <input type="radio" id="period_single" name="period_type" value="single" checked>
+                            <label for="period_single">单个报告期</label>
+                        </div>
+                        <div class="radio-item">
+                            <input type="radio" id="period_range" name="period_type" value="range">
+                            <label for="period_range">报告期范围</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 单个报告期 -->
+                <div id="singlePeriodSection" class="form-group">
+                    <label>选择报告期</label>
+                    <select id="singlePeriod" style="width: 100%; max-width: 300px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="">默认最新报告期</option>
+                    </select>
+                    <div class="helper-text">不选择则自动使用最新报告期</div>
+                </div>
+
+                <!-- 报告期范围 -->
+                <div id="rangePeriodSection" class="form-group" style="display: none;">
+                    <label>选择报告期范围（起始和结束）</label>
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                        <div>
+                            <select id="periodStart" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                                <option value="">选择起始报告期</option>
+                            </select>
+                        </div>
+                        <div>
+                            <select id="periodEnd" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                                <option value="">选择结束报告期</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="helper-text">选择起始和结束报告期，系统会自动清洗中间所有季度</div>
+                </div>
+            </div>
+
+            <!-- 日期范围模式 -->
+            <div id="dateModeSection" style="display: none;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                    <div class="form-group">
+                        <label>开始日期</label>
+                        <input type="date" id="startDate" value="2017-01-01">
+                        <div class="helper-text">建议从2017年开始</div>
+                    </div>
+                    <div class="form-group">
+                        <label>结束日期</label>
+                        <input type="date" id="endDate">
+                        <div class="helper-text">默认到今天</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 数据类型选择 -->
+        <div class="section">
+            <div class="section-title">
+                <span>📊</span>
+                <span>数据类型（可多选）</span>
+            </div>
+            <div class="checkbox-grid">
+                <div class="checkbox-item">
+                    <input type="checkbox" id="type_indicator" value="indicator" checked>
+                    <label for="type_indicator">📈 财务指标 (indicator)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="type_income" value="income" checked>
+                    <label for="type_income">利润表 (income)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="type_balance" value="balance" checked>
+                    <label for="type_balance">📊 资产负债表 (balance)</label>
+                </div>
+                <div class="checkbox-item">
+                    <input type="checkbox" id="type_cashflow" value="cashflow" checked>
+                    <label for="type_cashflow">💧 现金流量表 (cashflow)</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 股票范围 -->
+        <div class="section">
+            <div class="section-title">
+                <span>🏢</span>
+                <span>股票范围</span>
+            </div>
+            <div class="form-group">
+                <div class="radio-group">
+                    <div class="radio-item">
+                        <input type="radio" id="scope_all" name="stock_scope" value="all" checked>
+                        <label for="scope_all">全市场（推荐，自动VIP加速）</label>
+                    </div>
+                    <div class="radio-item">
+                        <input type="radio" id="scope_custom" name="stock_scope" value="custom">
+                        <label for="scope_custom">指定股票代码</label>
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>股票代码（多个用逗号分隔）</label>
+                <input type="text" id="stockCodes" class="stocks-input" 
+                       placeholder="例如：000001.SZ,000002.SZ,600000.SH,600519.SH" 
+                       disabled>
+                <div class="helper-text">格式：股票代码.交易所（SZ=深圳，SH=上海）。<strong>注意：超过50只股票建议使用全市场模式</strong></div>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="section">
+            <div class="section-title">
+                <span>🚀</span>
+                <span>快捷操作</span>
+            </div>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="startClean()">
+                    <span>🔄</span>
+                    <span>开始清洗</span>
+                </button>
+                <button class="btn btn-success" onclick="updateRecent()">
+                    <span>⚡</span>
+                    <span>更新最近2季度</span>
+                </button>
+                <button class="btn btn-warning" onclick="testClean()">
+                    <span>🧪</span>
+                    <span>测试清洗（5只股票）</span>
+                </button>
+                <button class="btn btn-secondary" onclick="resetForm()">
+                    <span>🔄</span>
+                    <span>重置</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 进度显示 -->
+        <div class="progress-section" id="progressSection" style="display: none;">
+            <div class="progress-header">
+                <div class="progress-title">📈 清洗进度</div>
+                <div class="status-badge" id="statusBadge">待开始</div>
+            </div>
+
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar" style="width: 0%;">0%</div>
+            </div>
+
+            <div class="progress-info">
+                <div class="info-item">
+                    <div class="info-label">当前任务</div>
+                    <div class="info-value" id="currentTask">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">数据类型</div>
+                    <div class="info-value" id="currentType">-</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">已处理/总数</div>
+                    <div class="info-value" id="processCount">0 / 0</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">数据源</div>
+                    <div class="info-value" id="dataSource">-</div>
+                </div>
+            </div>
+
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script>
+        let progressInterval = null;
+
+        // 生成报告期选项（最近8个季度）
+        function generatePeriodOptions() {
+            const options = [];
+            const now = new Date();
+            const currentYear = now.getFullYear();
+            
+            const quarters = [
+                { month: 3, day: 31, label: 'Q1' },
+                { month: 6, day: 30, label: 'Q2' },
+                { month: 9, day: 30, label: 'Q3' },
+                { month: 12, day: 31, label: 'Q4' },
+            ];
+            
+            let count = 0;
+            for (let year = currentYear; year >= currentYear - 2 && count < 8; year--) {
+                for (let i = quarters.length - 1; i >= 0 && count < 8; i--) {
+                    const q = quarters[i];
+                    const periodDate = new Date(year, q.month - 1, q.day);
+                    
+                    // 只显示已经过去的季度
+                    if (periodDate < now) {
+                        const value = `${year}${String(q.month).padStart(2, '0')}${String(q.day).padStart(2, '0')}`;
+                        const label = `${year}${q.label} (${value})`;
+                        options.push({ label, value });
+                        count++;
+                    }
+                }
+            }
+            
+            return options;
+        }
+
+        // 填充报告期选项
+        function populatePeriodSelects() {
+            const options = generatePeriodOptions();
+            const selects = ['singlePeriod', 'periodStart', 'periodEnd'];
+            
+            selects.forEach(selectId => {
+                const select = document.getElementById(selectId);
+                // 保留第一个默认选项
+                const defaultOption = select.querySelector('option[value=""]');
+                select.innerHTML = '';
+                if (defaultOption) {
+                    select.appendChild(defaultOption);
+                }
+                
+                options.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.label;
+                    select.appendChild(option);
+                });
+            });
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            // 设置默认结束日期为今天
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('endDate').value = today;
+
+            // 生成报告期选项
+            populatePeriodSelects();
+
+            // 监听日期模式切换
+            document.querySelectorAll('input[name="date_mode"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const periodSection = document.getElementById('periodModeSection');
+                    const dateSection = document.getElementById('dateModeSection');
+                    
+                    if (this.value === 'period') {
+                        periodSection.style.display = 'block';
+                        dateSection.style.display = 'none';
+                    } else {
+                        periodSection.style.display = 'none';
+                        dateSection.style.display = 'block';
+                    }
+                });
+            });
+
+            // 监听报告期类型切换
+            document.querySelectorAll('input[name="period_type"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const singleSection = document.getElementById('singlePeriodSection');
+                    const rangeSection = document.getElementById('rangePeriodSection');
+                    
+                    if (this.value === 'single') {
+                        singleSection.style.display = 'block';
+                        rangeSection.style.display = 'none';
+                    } else {
+                        singleSection.style.display = 'none';
+                        rangeSection.style.display = 'block';
+                    }
+                });
+            });
+
+            // 监听股票范围选择变化
+            document.querySelectorAll('input[name="stock_scope"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const stockCodesInput = document.getElementById('stockCodes');
+                    stockCodesInput.disabled = this.value === 'all';
+                    if (this.value === 'all') {
+                        stockCodesInput.value = '';
+                    }
+                });
+            });
+        });
+
+        // 获取选中的数据类型
+        function getSelectedTypes() {
+            const types = [];
+            document.querySelectorAll('input[type="checkbox"]:checked').forEach(cb => {
+                types.push(cb.value);
+            });
+            return types;
+        }
+
+        // 获取股票代码
+        function getStockCodes() {
+            const scope = document.querySelector('input[name="stock_scope"]:checked').value;
+            if (scope === 'all') {
+                return null;
+            }
+            const codes = document.getElementById('stockCodes').value.trim();
+            return codes || null;
+        }
+
+        // 开始清洗
+        async function startClean() {
+            const types = getSelectedTypes();
+            if (types.length === 0) {
+                alert('请至少选择一种数据类型');
+                return;
+            }
+
+            const dateMode = document.querySelector('input[name="date_mode"]:checked').value;
+            const params = new URLSearchParams();
+
+            // 根据模式选择不同的参数
+            if (dateMode === 'period') {
+                // 报告期模式
+                const periodType = document.querySelector('input[name="period_type"]:checked').value;
+                
+                if (periodType === 'single') {
+                    // 单个报告期
+                    const singlePeriod = document.getElementById('singlePeriod').value;
+                    if (singlePeriod) {
+                        params.append('periods', singlePeriod);
+                    }
+                    // 如果没有选择，后端会自动使用最新报告期
+                } else {
+                    // 报告期范围
+                    const periodStart = document.getElementById('periodStart').value;
+                    const periodEnd = document.getElementById('periodEnd').value;
+                    
+                    if (!periodStart || !periodEnd) {
+                        alert('请选择报告期范围（起始和结束）');
+                        return;
+                    }
+                    
+                    params.append('period_start', periodStart);
+                    params.append('period_end', periodEnd);
+                }
+            } else {
+                // 日期范围模式（使用旧接口）
+                const startDate = document.getElementById('startDate').value.replace(/-/g, '');
+                const endDate = document.getElementById('endDate').value.replace(/-/g, '');
+                
+                if (!startDate || !endDate) {
+                    alert('请选择日期范围');
+                    return;
+                }
+
+                params.append('period_start', startDate);
+                params.append('period_end', endDate);
+            }
+
+            // 股票代码
+            const symbols = getStockCodes();
+            if (symbols) {
+                params.append('symbols', symbols);
+            }
+            
+            // 数据类型
+            if (types.length < 4) {
+                params.append('data_types', types.join(','));
+            }
+            
+            showProgress();
+            
+            try {
+                // 使用新的报告期接口
+                const response = await fetch(`/datahub/api/v1/clean_financial_by_periods?${params}`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.error) {
+                    showError(result.error);
+                } else {
+                    startProgressPolling();
+                }
+            } catch (error) {
+                showError('启动清洗任务失败: ' + error.message);
+            }
+        }
+
+        // 更新最近2季度
+        async function updateRecent() {
+            const types = getSelectedTypes();
+            if (types.length === 0) {
+                alert('请至少选择一种数据类型');
+                return;
+            }
+
+            showProgress();
+            
+            try {
+                const params = new URLSearchParams();
+                
+                if (types.length < 4) {
+                    params.append('data_types', types.join(','));
+                }
+
+                const response = await fetch(`/datahub/api/v1/update_financial_daily?${params}`);
+                const result = await response.json();
+                
+                if (result.error) {
+                    showError(result.error);
+                } else {
+                    startProgressPolling();
+                }
+            } catch (error) {
+                showError('启动更新任务失败: ' + error.message);
+            }
+        }
+
+        // 测试清洗（5只股票）
+        async function testClean() {
+            if (!confirm('将使用5只股票进行测试清洗，是否继续？\n股票：000001.SZ, 000002.SZ, 000333.SZ, 600000.SH, 600519.SH')) {
+                return;
+            }
+
+            showProgress();
+            
+            try {
+                const response = await fetch('/datahub/api/v1/test_financial_clean');
+                const result = await response.json();
+                
+                if (result.error) {
+                    showError(result.error);
+                } else {
+                    startProgressPolling();
+                }
+            } catch (error) {
+                showError('启动测试任务失败: ' + error.message);
+            }
+        }
+
+        // 显示进度区域
+        function showProgress() {
+            document.getElementById('progressSection').style.display = 'block';
+            updateStatus('running', '正在启动...');
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressBar').textContent = '0%';
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+
+        // 开始轮询进度
+        function startProgressPolling() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+            }
+
+            // 立即查询一次
+            updateProgress();
+
+            // 每2秒查询一次
+            progressInterval = setInterval(updateProgress, 2000);
+        }
+
+        // 停止轮询
+        function stopProgressPolling() {
+            if (progressInterval) {
+                clearInterval(progressInterval);
+                progressInterval = null;
+            }
+        }
+
+        // 更新进度
+        async function updateProgress() {
+            try {
+                const response = await fetch('/datahub/api/v1/get_financial_progress');
+                const progress = await response.json();
+                
+                // 更新进度条
+                const percent = progress.progress_percent || 0;
+                document.getElementById('progressBar').style.width = percent + '%';
+                document.getElementById('progressBar').textContent = Math.round(percent) + '%';
+                
+                // 更新状态
+                updateStatus(progress.status || 'idle', getStatusText(progress.status));
+                
+                // 更新详细信息
+                document.getElementById('currentTask').textContent = progress.current_task || '-';
+                document.getElementById('currentType').textContent = progress.current_type || '-';
+                document.getElementById('processCount').textContent = 
+                    `${progress.processed_count || 0} / ${progress.total_count || 0}`;
+                document.getElementById('dataSource').textContent = progress.data_source || '-';
+                
+                // 显示错误信息
+                if (progress.error_message) {
+                    showError(progress.error_message);
+                }
+                
+                // 如果完成或出错，停止轮询
+                if (progress.status === 'completed' || progress.status === 'error') {
+                    stopProgressPolling();
+                }
+            } catch (error) {
+                console.error('查询进度失败:', error);
+            }
+        }
+
+        // 更新状态徽章
+        function updateStatus(status, text) {
+            const badge = document.getElementById('statusBadge');
+            badge.className = 'status-badge status-' + status;
+            badge.textContent = text;
+        }
+
+        // 获取状态文本
+        function getStatusText(status) {
+            const statusMap = {
+                'idle': '待开始',
+                'running': '清洗中...',
+                'completed': '已完成',
+                'error': '出错'
+            };
+            return statusMap[status] || '未知';
+        }
+
+        // 显示错误
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = '' + message;
+            errorDiv.style.display = 'block';
+        }
+
+        // 重置表单
+        function resetForm() {
+            document.getElementById('startDate').value = '2017-01-01';
+            document.getElementById('endDate').value = new Date().toISOString().split('T')[0];
+            document.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+            document.getElementById('scope_all').checked = true;
+            document.getElementById('stockCodes').value = '';
+            document.getElementById('stockCodes').disabled = true;
+            document.getElementById('progressSection').style.display = 'none';
+            stopProgressPolling();
+        }
+    </script>
+</body>
+</html>
+
