@@ -8,7 +8,7 @@ import traceback
 from panda_common.handlers.database_handler import DatabaseHandler
 from panda_common.logger_config import logger
 from panda_data_hub.models.requestEntity import FactorsRequest
-
+from panda_common.fields.financial_fields import ALL_FINANCIAL_FIELDS
 
 class FactorReader:
     def __init__(self, config):
@@ -93,7 +93,6 @@ class FactorReader:
         
         # 财务字段列表（来自财务报表：利润表、资产负债表、现金流量表、财务指标）
         # 使用集中配置管理
-        from panda_common.fields.financial_fields import ALL_FINANCIAL_FIELDS
         financial_factors = [f.lower() for f in ALL_FINANCIAL_FIELDS]
         
         requested_base_factors = [f for f in factors if f in base_factors]
@@ -176,24 +175,16 @@ class FactorReader:
             
             if records:
                 df_financial = pd.DataFrame(records)
-                
-                # 重要：保留 end_date 用于正确排序
-                # 将 ann_date 重命名为 date，用于和市场数据对齐
-                df_financial = df_financial.rename(columns={'ann_date': 'date'})
-                
-                # 关键修正：按 symbol, end_date 排序（而不是按 date）
-                # 这样可以确保 REF 函数引用到正确的历史季度
+                df_financial.rename(columns={'ann_date': 'date'},inplace=True)
                 # 例如：2023Q4 和 2024Q1 可能在同一天公告，但按 end_date 排序后顺序正确
-                df_financial = df_financial.sort_values(['symbol', 'end_date', 'date'])
-                
-                # 对于每个 (symbol, date) 组合，如果有多条记录，保留 end_date 最新的
+                df_financial.sort_values(['symbol', 'end_date', 'date'],inplace=True)
                 df_financial = df_financial.drop_duplicates(
                     subset=['symbol', 'date'], 
                     keep='last'  # 保留最新报告期的数据
                 )
                 
                 # 现在可以删除 end_date（已经通过排序保证了顺序）
-                df_financial = df_financial.drop(columns=['end_date'], errors='ignore')
+                df_financial.drop(columns=['end_date'], errors='ignore',inplace=True)
                 
                 all_data.append(df_financial)
                 logger.info(f"Fetched {len(df_financial)} financial indicator records (sorted by end_date)")
@@ -213,7 +204,7 @@ class FactorReader:
                     result,
                     df,
                     on=['date', 'symbol'],
-                    how='left'  # 使用 left join，保留所有交易日
+                    how='left'
                 )
                 # 按 symbol 分组，对财务字段进行前向填充
                 for col in requested_financial_factors:
