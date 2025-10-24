@@ -45,9 +45,80 @@ class StockMarketCleanTSServicePRO(ABC):
     def set_progress_callback(self, callback):
         self.progress_callback = callback
 
-    def stock_market_history_clean(self, start_date, end_date):
+    def check_trading_day_data_completeness(self, date_str):
+        """
+        检查指定交易日的数据是否已存在且完整
+        
+        参数:
+            date_str: 日期字符串，格式为 "YYYY-MM-DD"
+        
+        返回:
+            bool: 数据完整返回 True，否则返回 False
+        
+        智能判断标准：
+            - 该交易日有数据记录
+            - 如果过去5个交易日数据充足，使用动态阈值：平均股票数 - 200
+            - 如果过去交易日不足5个，使用固定阈值：3000
+        """
+        try:
+            # 转换日期格式为数据库存储格式 YYYYMMDD
+            date_formatted = date_str.replace("-", "")
+            
+            # 查询该交易日的数据数量
+            collection = self.db_handler.mongo_client[self.config["MONGO_DB"]]['stock_market']
+            count = collection.count_documents({'date': date_formatted})
+            
+            # 获取过去5个交易日的股票数量，用于动态阈值计算
+            previous_counts = []
+            try:
+                # 获取当前日期之前的交易日数据
+                pipeline = [
+                    {'$match': {'date': {'$lt': date_formatted}}},
+                    {'$group': {'_id': '$date', 'count': {'$sum': 1}}},
+                    {'$sort': {'_id': -1}},
+                    {'$limit': 5}
+                ]
+                results = list(collection.aggregate(pipeline))
+                previous_counts = [item['count'] for item in results]
+            except Exception as e:
+                logger.warning(f"获取过去交易日数据时出错: {str(e)}，将使用固定阈值")
+            
+            # 计算动态阈值
+            FIXED_MIN_COUNT = 3000  # 固定最小阈值
+            TOLERANCE = 200  # 允许的波动范围
+            
+            if len(previous_counts) >= 5:
+                # 有足够的历史数据，使用动态阈值
+                avg_count = sum(previous_counts) / len(previous_counts)
+                min_threshold = int(avg_count - TOLERANCE)
+                # 确保阈值不低于固定最小值
+                min_threshold = max(min_threshold, FIXED_MIN_COUNT)
+                threshold_type = "动态"
+                logger.debug(f"过去5个交易日平均股票数: {avg_count:.0f}，动态阈值: {min_threshold}")
+            else:
+                # 历史数据不足，使用固定阈值
+                min_threshold = FIXED_MIN_COUNT
+                threshold_type = "固定"
+                logger.debug(f"历史交易日数据不足({len(previous_counts)}个)，使用固定阈值: {min_threshold}")
+            
+            is_complete = count >= min_threshold
+            
+            if is_complete:
+                logger.info(f"交易日 {date_str} 数据已存在且完整 (股票数: {count}, {threshold_type}阈值: {min_threshold})")
+            else:
+                logger.info(f"交易日 {date_str} 数据不完整或缺失 (股票数: {count}, {threshold_type}阈值: {min_threshold})")
+            
+            return is_complete
+            
+        except Exception as e:
+            logger.error(f"检查交易日 {date_str} 数据完整性时出错: {str(e)}")
+            # 出错时保守处理，返回 False 以触发重新清洗
+            return False
+
+    def stock_market_history_clean(self, start_date, end_date, force_update=False):
 
         logger.info("Starting market data cleaning for tushare")
+        logger.info(f"强制更新模式: {'是' if force_update else '否'}")
         
         # 转换日期格式：20250930 -> 2025-09-30
         if len(start_date) == 8 and start_date.isdigit():
@@ -59,29 +130,70 @@ class StockMarketCleanTSServicePRO(ABC):
 
         # 获取交易日
         date_range = pd.date_range(start=start_date, end=end_date, freq='D')
-        trading_days = []
+        all_trading_days = []
         for date in date_range:
             date_str = datetime.strftime(date, "%Y-%m-%d")
             if ts_is_trading_day(date_str):
-                trading_days.append(date_str)
+                all_trading_days.append(date_str)
             else:
                 logger.info(f"跳过非交易日: {date_str}")
-        logger.info(f"找到 {len(trading_days)} 个交易日需要处理")
+        
+        logger.info(f"找到 {len(all_trading_days)} 个交易日")
+        
+        # 检查已存在的完整数据（如果不是强制更新模式）
+        trading_days = []
+        skipped_days = []
+        
+        if force_update:
+            logger.info("强制更新模式：将处理所有交易日")
+            trading_days = all_trading_days
+        else:
+            logger.info("智能跳过模式：检查已存在的完整数据...")
+            for date_str in all_trading_days:
+                if self.check_trading_day_data_completeness(date_str):
+                    skipped_days.append(date_str)
+                else:
+                    trading_days.append(date_str)
+            
+            logger.info(f"已跳过 {len(skipped_days)} 个已完整的交易日")
+            logger.info(f"需要处理 {len(trading_days)} 个交易日")
+            
+            if skipped_days:
+                logger.info(f"跳过的交易日: {', '.join(skipped_days[:5])}{'...' if len(skipped_days) > 5 else ''}")
+        
         total_days = len(trading_days)
         processed_days = 0
         
         # 初始化进度信息
         if self.progress_callback:
+            skip_info = f"（已跳过 {len(skipped_days)} 个完整交易日）" if skipped_days else ""
             self.progress_callback({
                 "progress_percent": 0,
-                "current_task": "准备开始处理交易日数据",
+                "current_task": f"准备开始处理交易日数据{skip_info}",
                 "processed_count": 0,
                 "total_count": total_days,
                 "current_date": "",
-                "batch_info": f"总共需要处理 {total_days} 个交易日",
+                "batch_info": f"总共 {len(all_trading_days)} 个交易日，需要处理 {total_days} 个{skip_info}",
                 "trading_days_processed": 0,
                 "trading_days_total": total_days,
             })
+        # 如果没有需要处理的交易日，直接返回
+        if total_days == 0:
+            logger.info("所有交易日数据已完整，无需处理")
+            if self.progress_callback:
+                self.progress_callback({
+                    "progress_percent": 100,
+                    "current_task": "所有数据已存在且完整",
+                    "processed_count": 0,
+                    "total_count": 0,
+                    "current_date": "",
+                    "batch_info": f"总共 {len(all_trading_days)} 个交易日均已完整，已全部跳过",
+                    "trading_days_processed": 0,
+                    "trading_days_total": 0,
+                    "status": "completed"
+                })
+            return
+        
         # 根据交易日去循环
         with tqdm(total=len(trading_days), desc="Processing Trading Days") as pbar:
             # 分批处理，每批8天
@@ -168,13 +280,14 @@ class StockMarketCleanTSServicePRO(ABC):
         
         # 发送完成状态
         if self.progress_callback:
+            skip_info = f"，跳过 {len(skipped_days)} 个已完整的交易日" if skipped_days else ""
             self.progress_callback({
                 "progress_percent": 100,
                 "current_task": "数据清洗已完成",
                 "processed_count": total_days,
                 "total_count": total_days,
                 "current_date": "",
-                "batch_info": f"成功处理了 {total_days} 个交易日的数据",
+                "batch_info": f"成功处理了 {total_days} 个交易日的数据{skip_info}",
                 "trading_days_processed": total_days,
                 "trading_days_total": total_days,
                 "status": "completed"

@@ -35,10 +35,10 @@ current_progress = {
 }
 
 @router.get('/upsert_stockmarket_final')
-async def upsert_stockmarket(start_date: str, end_date: str, background_tasks: BackgroundTasks):
+async def upsert_stockmarket(start_date: str, end_date: str, background_tasks: BackgroundTasks, force_update: bool = False):
     global current_progress
     
-    logger.info(f"收到数据清洗请求: start_date={start_date}, end_date={end_date}")
+    logger.info(f"收到数据清洗请求: start_date={start_date}, end_date={end_date}, force_update={force_update}")
     
     # 重置进度状态
     current_progress.update({
@@ -112,7 +112,8 @@ async def upsert_stockmarket(start_date: str, end_date: str, background_tasks: B
         run_with_error_handling,
         tushare_service.stock_market_history_clean,
         start_date,
-        end_date
+        end_date,
+        force_update
     )
     logger.info("Tushare后台任务已添加")
     
