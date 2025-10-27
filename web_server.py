@@ -1,5 +1,5 @@
 """
-PandaAI Web服务器
+天蝎座量化投资系统 Web服务器
 整合前端 + 数据清洗API
 不包含因子计算（避免初始化问题）
 """
@@ -19,7 +19,7 @@ from panda_data_hub.routes.query import data_query
 from panda_llm.routes import chat_router
 
 app = FastAPI(
-    title="PandaAI Web服务",
+    title="天蝎座量化投资系统 Web服务",
     description="前端界面 + 数据清洗API",
     version="1.0.0"
 )
@@ -94,6 +94,16 @@ async def data_statistics():
     else:
         return HTMLResponse(content="<h1>数据统计页面未找到</h1><p>请确保 data_statistics.html 文件存在</p>", status_code=404)
 
+@app.get("/system-config")
+async def system_config():
+    """系统配置页面"""
+    html_file = frontend_dir / "system_config.html"
+    if html_file.exists():
+        with open(html_file, 'r', encoding='utf-8') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>系统配置页面未找到</h1><p>请确保 system_config.html 文件存在</p>", status_code=404)
+
 @app.get("/financial-data-clean")
 async def financial_data_clean():
     """财务数据清洗页面"""
@@ -127,7 +137,7 @@ async def navigation_home():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>PandaAI 量化因子系统 - 导航中心</title>
+        <title>天蝎座量化投资系统 - 导航中心</title>
         <style>
             * {
                 margin: 0;
@@ -302,8 +312,8 @@ async def navigation_home():
     <body>
         <div class="container">
             <div class="header">
-                <div class="logo">🐼 PandaAI</div>
-                <div class="subtitle">量化因子系统 · 数据管理中心</div>
+                <div class="logo">♏ 天蝎座</div>
+                <div class="subtitle">量化投资系统 · 数据管理中心</div>
             </div>
             
             <div class="nav-grid">
@@ -317,13 +327,13 @@ async def navigation_home():
                     </div>
                 </a>
                 
-                <a href="/factor/#/datahubsource" class="nav-item">
+                <a href="/system-config" class="nav-item">
                     <div class="nav-title">
                         <span class="nav-icon">⚙️</span>
-                        数据源配置
+                        系统配置
                     </div>
                     <div class="nav-desc">
-                        配置 Tushare、米筐、迅投等数据源的API密钥和参数
+                        配置MongoDB、Tushare Token、数据清洗时间（配置立即生效）
                     </div>
                 </a>
                 
@@ -376,7 +386,7 @@ async def navigation_home():
             </div>
             
             <div class="footer">
-                PandaAI 量化因子库 © 2025 | 让每个Alpha都被看见
+                天蝎座量化投资系统 © 2025 | 天蝎座私募基金公司
             </div>
         </div>
         
@@ -453,7 +463,7 @@ async def navigation_home():
             
             // 页面加载完成后检查状态
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('PandaAI Navigation Center Loaded');
+                console.log('Scorpio Quant System Navigation Center Loaded');
                 updateSystemStatus();
                 
                 // 每30秒自动检查一次服务状态
@@ -479,7 +489,7 @@ async def health_check():
 async def api_info():
     """API信息（JSON格式）"""
     return {
-        "service": "PandaAI Web服务",
+        "service": "天蝎座量化投资系统 Web服务",
         "version": "1.0.0",
         "endpoints": {
             "前端界面": "/factor/",
@@ -500,13 +510,13 @@ def main():
     from panda_common.logger_config import logger
     
     logger.info("=" * 60)
-    logger.info("PandaAI Web服务器启动中...")
+    logger.info("天蝎座量化投资系统 Web服务器启动中...")
     logger.info("=" * 60)
     
     print("\n" + "=" * 60)
-    print("  PandaAI Web服务器")
+    print("  天蝎座量化投资系统 Web服务器")
     print("=" * 60)
-    print("\n📊 服务地址:")
+    print("\n服务地址:")
     print("  前端界面: http://localhost:8080/factor/")
     print("  API文档:  http://localhost:8080/docs")
     print("  健康检查: http://localhost:8080/health")
@@ -517,8 +527,7 @@ def main():
     print("\n💡 提示:")
     print("  - 此服务包含前端界面、数据清洗和AI对话功能")
     print("  - 因子计算服务需要单独启动（端口8111）")
-    print("  - 使用 'python -m panda_factor_server' 启动因子服务")
-    print("  - AI对话使用DeepSeek API（配置在config.yaml）")
+    print("  - AI对话功能已集成")
     print("\n⚡ 按 Ctrl+C 停止服务")
     print("=" * 60 + "\n")
     

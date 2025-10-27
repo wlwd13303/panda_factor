@@ -1,8 +1,0 @@
-.progress-panel {
-  height: 100%;
-}
-
-.progress-panel .ant-card-body {
-  height: calc(100% - 57px);
-}
-

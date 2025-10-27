@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks
 
-from panda_common.config import config
+from panda_common.config import get_config
 from panda_common.logger_config import logger
 
 from panda_data_hub.services.ts_stock_market_clean_service import StockMarketCleanTSServicePRO
@@ -106,7 +106,9 @@ async def upsert_stockmarket(start_date: str, end_date: str, background_tasks: B
             })
     
     logger.info("初始化Tushare服务")
-    tushare_service = StockMarketCleanTSServicePRO(config)
+    # 动态获取最新配置，确保使用热加载后的配置
+    current_config = get_config()
+    tushare_service = StockMarketCleanTSServicePRO(current_config)
     tushare_service.set_progress_callback(progress_callback)
     background_tasks.add_task(
         run_with_error_handling,

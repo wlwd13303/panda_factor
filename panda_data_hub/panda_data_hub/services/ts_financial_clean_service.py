@@ -160,7 +160,7 @@ class FinancialCleanTSService(ABC):
         # 解析报告期信息用于日志
         periods_info = self._format_periods_info(periods)
         
-        logger.info(f"🚀 开始财务数据清洗任务 - {stock_info} | {periods_info} | {total_types}种数据类型")
+        logger.info(f"开始财务数据清洗任务 - {stock_info} | {periods_info} | {total_types}种数据类型")
         
         # 发送初始进度
         if self.progress_callback:
@@ -220,7 +220,7 @@ class FinancialCleanTSService(ABC):
                 "status": "completed"
             })
         
-        logger.info(f"🎉 财务数据清洗任务完成")
+        logger.info(f"财务数据清洗任务完成")
     
     def _format_periods_info(self, periods):
         """格式化报告期信息用于日志"""

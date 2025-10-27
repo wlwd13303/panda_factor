@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks
-from panda_common.config import config
+from panda_common.config import get_config
 from panda_common.logger_config import logger
 from typing import Dict
 
@@ -51,7 +51,9 @@ async def upsert_factor(start_date: str, end_date: str, background_tasks: Backgr
             })
 
     logger.info("初始化Tushare因子服务")
-    tushare_service = FactorCleanerTSProService(config)
+    # 动态获取最新配置，确保使用热加载后的配置
+    current_config = get_config()
+    tushare_service = FactorCleanerTSProService(current_config)
     tushare_service.set_progress_callback(progress_callback)
     background_tasks.add_task(
         run_with_error_handling,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 """
-PandaAI 统一启动脚本
+天蝎座量化投资系统 统一启动脚本
 一键启动所有服务
 """
 import os
@@ -114,7 +114,7 @@ def start_service(name, command, cwd=None, wait_time=2, check_port_num=None):
         return None
 
 def main():
-    print_header("PandaAI 量化因子系统")
+    print_header("天蝎座量化投资系统")
     print_info("统一启动所有服务...")
     
     # 获取项目根目录
@@ -183,7 +183,7 @@ def main():
     print_header("服务访问地址")
     print(f"{Colors.BOLD}前端界面:{Colors.ENDC}")
     print(f"  {Colors.OKCYAN}http://localhost:8080/{Colors.ENDC}")
-    print(f"  {Colors.OKCYAN}http://localhost:8080/factor/{Colors.ENDC} (量化因子系统)")
+    print(f"  {Colors.OKCYAN}http://localhost:8080/factor/{Colors.ENDC} (天蝎座量化投资系统)")
     print()
     print(f"{Colors.BOLD}API文档:{Colors.ENDC}")
     print(f"  {Colors.OKCYAN}http://localhost:8080/docs{Colors.ENDC} (数据清洗API)")

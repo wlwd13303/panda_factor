@@ -98,6 +98,11 @@ def get_stock_market_type(stock_code):
     else:
         return None
 
+class TushareTokenError(Exception):
+    """Tushare Token 相关错误的专用异常"""
+    pass
+
+
 def ts_is_trading_day(date):
     """
     判断传入的日期是否为股票交易日
@@ -107,6 +112,9 @@ def ts_is_trading_day(date):
 
     返回:
     bool: 如果是交易日返回 True，否则返回 False
+    
+    抛出:
+    TushareTokenError: 当 token 无效或认证失败时
     """
     try:
         # 每次调用时都重新获取配置并设置token，确保使用最新的token
@@ -124,8 +132,55 @@ def ts_is_trading_day(date):
             return True
         return False
     except Exception as e:
-        logger.error(f"检查交易日失败 {date}: {str(e)}")
-        return False
+        error_msg = str(e).lower()
+        # 检测 token 相关错误
+        if any(keyword in error_msg for keyword in ['token', '认证', '权限', 'auth', 'permission']):
+            logger.error(f"Tushare Token 错误 {date}: {str(e)}")
+            raise TushareTokenError(f"Tushare Token 无效或认证失败: {str(e)}")
+        else:
+            logger.error(f"检查交易日失败 {date}: {str(e)}")
+            return False
+
+
+def validate_tushare_token():
+    """
+    验证 Tushare token 是否有效
+    
+    返回:
+    tuple: (is_valid: bool, error_message: str)
+    """
+    try:
+        from panda_common.config import get_config
+        config = get_config()
+        
+        if not config.get('TS_TOKEN'):
+            return False, "未配置 Tushare Token，请在配置文件中设置 TS_TOKEN"
+        
+        ts.set_token(config['TS_TOKEN'])
+        
+        # 尝试调用一个简单的 API 来验证 token
+        from datetime import datetime
+        today = datetime.now().strftime('%Y%m%d')
+        pro = ts.pro_api()
+        test_df = pro.query('trade_cal', exchange='SSE', start_date=today, end_date=today)
+        
+        if test_df is not None:
+            logger.info("Tushare Token 验证成功")
+            return True, ""
+        else:
+            return False, "Token 验证失败：API 返回空数据"
+            
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Tushare Token 验证失败: {error_msg}")
+        
+        # 提供更友好的错误提示
+        if 'token' in error_msg.lower() or '不对' in error_msg or '请确认' in error_msg:
+            return False, f"Token 无效：{error_msg}\n\n请检查配置文件中的 TS_TOKEN 是否正确。您可以在 Tushare 官网（https://tushare.pro/）的个人中心查看您的 Token。"
+        elif '权限' in error_msg or 'permission' in error_msg.lower():
+            return False, f"权限不足：{error_msg}\n\n您的 Token 权限可能不足，请升级 Tushare 账户权限。"
+        else:
+            return False, f"Token 验证失败：{error_msg}"
 
 def get_previous_month_dates(date_str):
     """

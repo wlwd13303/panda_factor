@@ -2,7 +2,7 @@
     <meta charset="UTF-8">
     <link rel="icon" type="image/x-icon" href="/factor/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PandaAI</title>
+    <title>天蝎座量化投资系统</title>
     <script>
       // 将前端中硬编码的地址重写为本地接口
       (function(){
@@ -12,7 +12,7 @@
             const url = typeof input === 'string' ? input : (input && input.url);
             
             // 重写 LLM 地址
-            if (url && url.indexOf('https://www.pandaai.online/llm/chat') === 0) {
+            if (url && url.indexOf('/llm/chat') >= 0) {
               input = '/llm/chat';
             }
             

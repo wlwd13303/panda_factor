@@ -3,7 +3,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, BackgroundTasks
 
-from panda_common.config import config
+from panda_common.config import get_config
 from panda_data_hub.services.ts_financial_clean_service import FinancialCleanTSService
 
 router = APIRouter()
@@ -47,6 +47,9 @@ async def clean_financial_history(
     """
     global financial_progress
     
+    # 动态获取最新配置
+    current_config = get_config()
+    
     # 重置进度状态
     financial_progress.update({
         "progress_percent": 0,
@@ -58,7 +61,7 @@ async def clean_financial_history(
         "estimated_completion": None,
         "current_type": "",
         "error_message": "",
-        "data_source": config.get('DATAHUBSOURCE', 'tushare'),
+        "data_source": current_config.get('DATAHUBSOURCE', 'tushare'),
         "batch_info": "",
     })
     
@@ -91,10 +94,10 @@ async def clean_financial_history(
                 pass
     
     # 创建服务实例
-    data_source = config.get('DATAHUBSOURCE', 'tushare')
+    data_source = current_config.get('DATAHUBSOURCE', 'tushare')
     
     if data_source == 'tushare':
-        service = FinancialCleanTSService(config)
+        service = FinancialCleanTSService(current_config)
         service.set_progress_callback(progress_callback)
         
         # 在后台运行清洗任务
@@ -138,6 +141,9 @@ async def update_financial_daily(
     """
     global financial_progress
     
+    # 动态获取最新配置
+    current_config = get_config()
+    
     # 重置进度状态
     financial_progress.update({
         "progress_percent": 0,
@@ -149,7 +155,7 @@ async def update_financial_daily(
         "estimated_completion": None,
         "current_type": "",
         "error_message": "",
-        "data_source": config.get('DATAHUBSOURCE', 'tushare'),
+        "data_source": current_config.get('DATAHUBSOURCE', 'tushare'),
         "batch_info": "更新最近2个季度的数据",
     })
     
@@ -168,10 +174,10 @@ async def update_financial_daily(
         financial_progress.update(progress_info)
     
     # 创建服务实例
-    data_source = config.get('DATAHUBSOURCE', 'tushare')
+    data_source = current_config.get('DATAHUBSOURCE', 'tushare')
     
     if data_source == 'tushare':
-        service = FinancialCleanTSService(config)
+        service = FinancialCleanTSService(current_config)
         service.set_progress_callback(progress_callback)
         
         # 在后台运行更新任务
@@ -240,6 +246,9 @@ async def clean_financial_by_periods(
     """
     global financial_progress
     
+    # 动态获取最新配置
+    current_config = get_config()
+    
     # 重置进度状态
     financial_progress.update({
         "progress_percent": 0,
@@ -251,7 +260,7 @@ async def clean_financial_by_periods(
         "estimated_completion": None,
         "current_type": "",
         "error_message": "",
-        "data_source": config.get('DATAHUBSOURCE', 'tushare'),
+        "data_source": current_config.get('DATAHUBSOURCE', 'tushare'),
         "batch_info": "",
     })
     
@@ -296,10 +305,10 @@ async def clean_financial_by_periods(
                 pass
     
     # 创建服务实例
-    data_source = config.get('DATAHUBSOURCE', 'tushare')
+    data_source = current_config.get('DATAHUBSOURCE', 'tushare')
     
     if data_source == 'tushare':
-        service = FinancialCleanTSService(config)
+        service = FinancialCleanTSService(current_config)
         service.set_progress_callback(progress_callback)
         
         # 在后台运行清洗任务
@@ -361,8 +370,11 @@ async def test_financial_clean(
     """
     global financial_progress
     
+    # 动态获取最新配置
+    current_config = get_config()
+    
     # 使用配置文件中的日期范围
-    start_date = str(config.get('HUB_START_DATE', '20170101'))
+    start_date = str(current_config.get('HUB_START_DATE', '20170101'))
     end_date = datetime.now().strftime("%Y%m%d")
     
     # 重置进度状态
@@ -376,7 +388,7 @@ async def test_financial_clean(
         "estimated_completion": None,
         "current_type": "",
         "error_message": "",
-        "data_source": config.get('DATAHUBSOURCE', 'tushare'),
+        "data_source": current_config.get('DATAHUBSOURCE', 'tushare'),
         "batch_info": "测试模式 - 5只股票",
     })
     
@@ -389,7 +401,7 @@ async def test_financial_clean(
         financial_progress.update(progress_info)
     
     # 创建服务实例
-    service = FinancialCleanTSService(config)
+    service = FinancialCleanTSService(current_config)
     service.set_progress_callback(progress_callback)
     
     # 在后台运行测试任务

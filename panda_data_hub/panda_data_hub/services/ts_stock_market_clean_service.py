@@ -15,8 +15,14 @@ from panda_common.handlers.database_handler import DatabaseHandler
 from panda_common.logger_config import logger
 from panda_common.utils.stock_utils import get_exchange_suffix
 from panda_data_hub.utils.mongo_utils import ensure_collection_and_indexes
-from panda_data_hub.utils.ts_utils import calculate_upper_limit, ts_is_trading_day, get_previous_month_dates, \
-    calculate_lower_limit
+from panda_data_hub.utils.ts_utils import (
+    calculate_upper_limit, 
+    ts_is_trading_day, 
+    get_previous_month_dates,
+    calculate_lower_limit,
+    TushareTokenError,
+    validate_tushare_token
+)
 
 """
        使用须知：因tushare对于接口返回数据条数具有严格限制，故无法一次拉取全量数据。此限制会导致接口运行效率偏低，请耐心等待。
@@ -120,6 +126,34 @@ class StockMarketCleanTSServicePRO(ABC):
         logger.info("Starting market data cleaning for tushare")
         logger.info(f"强制更新模式: {'是' if force_update else '否'}")
         
+        # 初始化进度信息
+        if self.progress_callback:
+            self.progress_callback({
+                "progress_percent": 0,
+                "current_task": "验证 Tushare Token...",
+                "processed_count": 0,
+                "total_count": 0,
+                "status": "running"
+            })
+        
+        # 在开始前验证 token
+        logger.info("验证 Tushare Token...")
+        is_valid, error_message = validate_tushare_token()
+        if not is_valid:
+            logger.error(f"Tushare Token 验证失败: {error_message}")
+            if self.progress_callback:
+                self.progress_callback({
+                    "progress_percent": 0,
+                    "current_task": "Token 验证失败",
+                    "error_message": error_message,
+                    "status": "error",
+                    "processed_count": 0,
+                    "total_count": 0
+                })
+            raise TushareTokenError(error_message)
+        
+        logger.info("Tushare Token 验证成功，开始数据清洗")
+        
         # 转换日期格式：20250930 -> 2025-09-30
         if len(start_date) == 8 and start_date.isdigit():
             start_date = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:]}"
@@ -128,15 +162,36 @@ class StockMarketCleanTSServicePRO(ABC):
         
         logger.info(f"日期范围: {start_date} 至 {end_date}")
 
+        # 更新进度
+        if self.progress_callback:
+            self.progress_callback({
+                "current_task": "获取交易日列表...",
+            })
+
         # 获取交易日
         date_range = pd.date_range(start=start_date, end=end_date, freq='D')
         all_trading_days = []
-        for date in date_range:
-            date_str = datetime.strftime(date, "%Y-%m-%d")
-            if ts_is_trading_day(date_str):
-                all_trading_days.append(date_str)
-            else:
-                logger.info(f"跳过非交易日: {date_str}")
+        try:
+            for date in date_range:
+                date_str = datetime.strftime(date, "%Y-%m-%d")
+                if ts_is_trading_day(date_str):
+                    all_trading_days.append(date_str)
+                else:
+                    logger.info(f"跳过非交易日: {date_str}")
+        except TushareTokenError as e:
+            # 捕获 token 错误并传递给前端
+            error_msg = f"Tushare Token 错误：{str(e)}\n\n请检查您的 Tushare Token 配置。"
+            logger.error(error_msg)
+            if self.progress_callback:
+                self.progress_callback({
+                    "progress_percent": 0,
+                    "current_task": "Token 错误",
+                    "error_message": error_msg,
+                    "status": "error",
+                    "processed_count": 0,
+                    "total_count": 0
+                })
+            raise
         
         logger.info(f"找到 {len(all_trading_days)} 个交易日")
         
