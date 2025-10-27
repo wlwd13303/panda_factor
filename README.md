@@ -1,26 +1,7 @@
-# PandaFactor - PandaAI量化因子库
-![预览](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/ezgif-84dc5a49963246.gif
-)
-
-## PandaAI首届因子大赛已启动，你的Alpha值得被看见
-“没有一个alpha，一开始就是alpha”
-
-“开始量化，最好是十年前，其次是现在”
-
-“如果没有天赋，那就一直重复”
-
-“看似不起眼的数学，会在将来的某一天，突然让你看到坚持的意义”
-
-“一切都很好，我听到自己，向上的声音”
-
-“市场会惩罚，模糊的愿望，奖励清晰的请求”
-
-“你正在寻找的因子，此刻也在寻找你”
-
-[点击报名](https://www.pandaai.online/factorhub/factorcompetition)
+# 天蝎座量化投资系统
 ## 概述
 
-PandaFactor 提供了一系列高性能的量化算子，用于金融数据分析、技术指标计算和因子构建，并且提供了一系列的可视化图表。
+天蝎座量化投资系统提供了一系列高性能的量化算子，用于金融数据分析、技术指标计算和因子构建，并且提供了一系列的可视化图表。
 
 ## 因子编写方法
 
@@ -91,7 +72,7 @@ IF(CLOSE > DELAY(CLOSE, 1), 1, -1)
 
 ## 函数和算子支持情况
 
-[点击查看](https://www.pandaai.online/community/article/72)
+支持多种技术指标和算子计算。
 
 ## 安装
 - 若您为个人交易者，想要快速本地的使用该因子模块，我们准备了一份初始数据库，解压即可运行，因为文件较大，请联系小助理领取，下载解压后，直接执行bin/db_start.bat即可启动数据库。
@@ -115,10 +96,8 @@ IF(CLOSE > DELAY(CLOSE, 1), 1, -1)
 
 若您有相关数据源需求，请务必联系我们，我们会尽快为您接入。
 
-## 下载最新数据库
-因表结构更新，请在网盘下载最新的数据库
-网盘链接: https://pan.baidu.com/s/15jip2SATiORuqaBNMDm4fw?pwd=uupm 提取码: uupm 
-近期更新因子持久化功能，让计算好的因子直接保存，自动更新，极速提取。
+## 数据库说明
+因表结构更新，系统支持因子持久化功能，让计算好的因子直接保存，自动更新，极速提取。
 
 ## 📁 项目结构
 
@@ -158,8 +137,8 @@ panda_data.init()
 factor = panda_data.get_factor_by_name(factor_name="VH03cc651", start_date='20240320',end_date='20250325')
 ```
 
-## 加群答疑（备注【开源】更快通过）
-![PandaAI 交流群](https://zynf-test.oss-cn-shanghai.aliyuncs.com/github/wechat_2025-06-27_102633_615.png)
+## 技术支持
+天蝎座私募基金公司 量化投资团队
 
 
 ## 贡献
