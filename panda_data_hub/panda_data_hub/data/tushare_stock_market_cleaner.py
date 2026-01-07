@@ -48,10 +48,12 @@ class TSStockMarketCleaner(ABC):
             zz_500 = self.pro.query('index_weight', index_code='000905.SH', start_date=mid_date, end_date=last_date)
             # 中证1000成分股
             zz_1000 = self.pro.query('index_weight', index_code='000852.SH', start_date=mid_date, end_date=last_date)
+            # 中证2000成分股
+            zz_2000 = self.pro.query('index_weight', index_code='932000.CSI', start_date=mid_date, end_date=last_date)
             for idx, row in price_data.iterrows():
                 try:
                     component = self.clean_index_components(data_symbol=row['ts_code'], date=date, hs_300=hs_300,
-                                                            zz_500=zz_500, zz_1000=zz_1000)
+                                                            zz_500=zz_500, zz_1000=zz_1000, zz_2000=zz_2000)
                     price_data.at[idx, 'index_component'] = component
                     logger.info(f"Success to clean index for {row['ts_code']} on {date}")
                 except Exception as e:
@@ -99,7 +101,7 @@ class TSStockMarketCleaner(ABC):
         except Exception as e:
             logger.error({e})
 
-    def clean_index_components(self, date, data_symbol, hs_300, zz_500, zz_1000):
+    def clean_index_components(self, date, data_symbol, hs_300, zz_500, zz_1000,zz_2000):
         try:
             # 首先查询沪深300
             if data_symbol in hs_300['con_code'].values:
@@ -112,6 +114,10 @@ class TSStockMarketCleaner(ABC):
             # 如果不在中证500中，查询中证1000
             if data_symbol in zz_1000['con_code'].values:
                 return '001'
+
+            # 如果不在中证1000中，查询中证2000
+            if data_symbol in zz_2000['con_code'].values:
+                return '002'
 
             # 如果都不在其中
             return '000'
