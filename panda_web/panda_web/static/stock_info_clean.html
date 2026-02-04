@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>股票基础信息清洗 - 天蝎座量化系统</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f5f7fa;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            width: 100%;
+            max-width: 600px;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 24px;
+        }
+        .control-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .status-box {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        .progress-bar-container {
+            height: 10px;
+            background: #e9ecef;
+            border-radius: 5px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #28a745;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .status-text {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .back-link {
+            display: block;
+            text-align: center;
+            margin-top: 20px;
+            color: #667eea;
+            text-decoration: none;
+        }
+        .back-link:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>股票基础信息清洗</h1>
+        
+        <div class="control-panel">
+            <div style="text-align: center; color: #666; margin-bottom: 10px;">
+                更新 stock_info_new 表 (股票、ETF、指数)
+            </div>
+            <button id="startBtn" onclick="startCleaning()">开始清洗任务</button>
+        </div>
+
+        <div class="status-box">
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progressBar"></div>
+            </div>
+            <div class="status-text" id="statusText">等待开始...</div>
+        </div>
+
+        <a href="/" class="back-link">返回主页</a>
+    </div>
+
+    <script>
+        let isRunning = false;
+        let pollInterval = null;
+
+        async function startCleaning() {
+            if (isRunning) return;
+            
+            const btn = document.getElementById('startBtn');
+            btn.disabled = true;
+            btn.innerText = '正在启动...';
+            
+            try {
+                const response = await fetch('/datahub/api/v1/stock_info_clean');
+                if (response.ok) {
+                    isRunning = true;
+                    btn.innerText = '清洗进行中...';
+                    startPolling();
+                } else {
+                    alert('启动失败');
+                    btn.disabled = false;
+                    btn.innerText = '开始清洗任务';
+                }
+            } catch (e) {
+                console.error(e);
+                alert('请求错误');
+                btn.disabled = false;
+                btn.innerText = '开始清洗任务';
+            }
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(checkProgress, 1000);
+        }
+
+        async function checkProgress() {
+            try {
+                const response = await fetch('/datahub/api/v1/get_progress_stock_info');
+                const data = await response.json();
+                
+                const progressBar = document.getElementById('progressBar');
+                const statusText = document.getElementById('statusText');
+                const btn = document.getElementById('startBtn');
+
+                progressBar.style.width = data.progress_percent + '%';
+                statusText.innerText = `${data.current_task} (${data.progress_percent}%)`;
+
+                if (data.status === 'completed' || data.status === 'error') {
+                    clearInterval(pollInterval);
+                    isRunning = false;
+                    btn.disabled = false;
+                    btn.innerText = '开始清洗任务';
+                    
+                    if (data.status === 'completed') {
+                        statusText.innerText = '任务完成！';
+                        statusText.style.color = '#28a745';
+                    } else {
+                        statusText.innerText = '任务出错: ' + data.error_message;
+                        statusText.style.color = '#dc3545';
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    </script>
+</body>
+</html>
