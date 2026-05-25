@@ -462,7 +462,7 @@
                 </button>
                 <button class="btn btn-success" onclick="updateRecent()">
                     <span>⚡</span>
-                    <span>更新最近7天</span>
+                    <span>更新昨日数据</span>
                 </button>
                 <button class="btn btn-secondary" onclick="resetForm()">
                     <span>🔄</span>
@@ -544,18 +544,18 @@
             }
         }
 
-        // 更新最近7天
+        // 更新昨日数据
         async function updateRecent() {
-            if (!confirm('确认更新最近7天的因子数据？\n\n将清洗以下因子：\n• 市值 (market_cap)\n• 换手率 (turnover)\n• 成交额 (amount)\n• 开高低收 (OHLC)\n• 成交量 (volume)')) {
+            if (!confirm('确认更新昨日的因子数据？\n\n将清洗以下因子：\n• 市值 (market_cap)\n• 换手率 (turnover)\n• 成交额 (amount)\n• 开高低收 (OHLC)\n• 成交量 (volume)')) {
                 return;
             }
 
             const today = new Date();
-            const sevenDaysAgo = new Date(today);
-            sevenDaysAgo.setDate(today.getDate() - 7);
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
 
-            const startDate = sevenDaysAgo.toISOString().split('T')[0].replace(/-/g, '');
-            const endDate = today.toISOString().split('T')[0].replace(/-/g, '');
+            const startDate = yesterday.toISOString().split('T')[0].replace(/-/g, '');
+            const endDate = yesterday.toISOString().split('T')[0].replace(/-/g, '');
 
             showProgress();
             

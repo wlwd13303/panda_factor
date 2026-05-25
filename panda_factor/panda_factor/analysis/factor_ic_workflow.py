@@ -46,7 +46,20 @@ def factor_ic_workflow(df_factor: pd.DataFrame, adjustment_cycle, group_number, 
             logger.info("Cleaning K-line data")
             if df_k_data is not None:
                 df_k_data_cleaned = clean_k_data(df_k_data)
-                logger.info("Calculating post-adjustment and future returns")
+                logger.info("Fetching adj_factor data for precise adjusted price calculation")
+                adj_factor_df = panda_data.get_adj_factor(
+                    start_date=start_time,
+                    end_date=end_time
+                )
+                if adj_factor_df is not None and not adj_factor_df.empty:
+                    # adj_factor symbol 格式为 ts_code (如 600519.SH)，market 为纯代码 (如 600519)
+                    adj_factor_df['symbol'] = adj_factor_df['symbol'].str.replace(r'\.(SH|SZ|BJ)$', '', regex=True)
+                    df_k_data_cleaned = df_k_data_cleaned.merge(
+                        adj_factor_df[['date', 'symbol', 'adj_factor']],
+                        on=['date', 'symbol'], how='left'
+                    )
+                    df_k_data_cleaned['adj_factor'] = df_k_data_cleaned.groupby('symbol')['adj_factor'].ffill()
+                logger.info("Calculating adjusted prices and future returns")
                 df_k_data = df_k_data_cleaned.groupby('symbol', group_keys=False).apply(cal_hfq)
 
         except Exception as e:

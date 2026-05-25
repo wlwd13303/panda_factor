@@ -85,6 +85,51 @@ def ensure_collection_and_indexes_tm(table_name):
         raise  # 抛出异常，因为这是初始化的关键步骤
 
 
+def ensure_collection_and_indexes_adj_factor(table_name):
+    """
+    确保复权因子数据集合存在并创建所需的索引
+    复权因子数据表使用 (symbol, date) 作为复合唯一索引
+    """
+    try:
+        db = DatabaseHandler(config).mongo_client[config["MONGO_DB"]]
+        collection_name = table_name
+
+        if collection_name not in db.list_collection_names():
+            db.create_collection(collection_name)
+            logger.info(f"成功创建复权因子集合 {collection_name}")
+
+        collection = db[collection_name]
+        existing_indexes = collection.index_information()
+
+        index_name = 'symbol_date_idx'
+        if index_name not in existing_indexes:
+            collection.create_index(
+                [
+                    ('symbol', 1),
+                    ('date', 1)
+                ],
+                name=index_name,
+                unique=True,
+                background=True
+            )
+            logger.info(f"成功创建复权因子索引 {index_name}")
+        else:
+            logger.info(f"复权因子索引 {index_name} 已存在")
+
+        date_index_name = 'date_idx'
+        if date_index_name not in existing_indexes:
+            collection.create_index(
+                [('date', 1)],
+                name=date_index_name,
+                background=True
+            )
+            logger.info(f"成功创建复权因子索引 {date_index_name}")
+
+    except Exception as e:
+        logger.error(f"创建复权因子集合或索引失败: {str(e)}")
+        raise
+
+
 def ensure_collection_and_indexes_financial(table_name):
     """
     确保财务数据集合存在并创建所需的索引

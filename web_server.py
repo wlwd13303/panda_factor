@@ -3,7 +3,16 @@
 整合前端 + 数据清洗API
 不包含因子计算（避免初始化问题）
 """
+import sys
 from pathlib import Path
+
+# Prefer local repo packages over site-packages to pick up latest changes.
+repo_root = Path(__file__).parent.resolve()
+local_pkg_root = repo_root / "panda_data_hub"
+if local_pkg_root.exists():
+    sys.path.insert(0, str(local_pkg_root))
+
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -11,7 +20,7 @@ from fastapi.responses import Response, HTMLResponse
 import base64
 
 # Import data hub routes
-from panda_data_hub.routes.data_clean import factor_data_clean, stock_market_data_clean, financial_data_clean, dividend_data_clean, index_market_data_clean, valuation_factor_data_clean, namechange_data_clean, stock_info_data_clean
+from panda_data_hub.routes.data_clean import factor_data_clean, stock_market_data_clean, adj_factor_data_clean, financial_data_clean, dividend_data_clean, index_market_data_clean, valuation_factor_data_clean, namechange_data_clean, stock_info_data_clean
 from panda_data_hub.routes.config import config_redefine
 from panda_data_hub.routes.query import data_query
 
@@ -42,6 +51,7 @@ app.include_router(data_query.router, prefix="/datahub/api/v1", tags=["数据查
 app.include_router(config_redefine.router, prefix="/datahub/api/v1", tags=["配置管理"])
 app.include_router(factor_data_clean.router, prefix="/datahub/api/v1", tags=["因子数据清洗"])
 app.include_router(stock_market_data_clean.router, prefix="/datahub/api/v1", tags=["股票市场数据清洗"])
+app.include_router(adj_factor_data_clean.router, prefix="/datahub/api/v1", tags=["复权因子数据清洗"])
 app.include_router(financial_data_clean.router, prefix="/datahub/api/v1", tags=["财务数据清洗"])
 app.include_router(dividend_data_clean.router, prefix="/datahub/api/v1", tags=["分红数据清洗"])
 app.include_router(index_market_data_clean.router, prefix="/datahub/api/v1", tags=["指数行情数据清洗"])
@@ -139,6 +149,16 @@ async def stock_market_clean():
             return HTMLResponse(content=f.read())
     else:
         return HTMLResponse(content="<h1>股票行情清洗页面未找到</h1><p>请确保 stock_market_clean.html 文件存在</p>", status_code=404)
+
+@app.get("/adj-factor-clean")
+async def adj_factor_clean_page():
+    """复权因子数据清洗页面"""
+    html_file = frontend_dir / "adj_factor_data_clean.html"
+    if html_file.exists():
+        with open(html_file, 'r', encoding='utf-8') as f:
+            return HTMLResponse(content=f.read())
+    else:
+        return HTMLResponse(content="<h1>复权因子数据清洗页面未找到</h1><p>请确保 adj_factor_data_clean.html 文件存在</p>", status_code=404)
 
 @app.get("/factor-data-clean")
 async def factor_data_clean_page():
@@ -373,6 +393,75 @@ async def navigation_home():
                 50% { opacity: 0.5; }
                 100% { opacity: 1; }
             }
+            /* 一键更新面板 */
+            .action-panel {
+                background: linear-gradient(135deg, #fef9e7 0%, #fdebd0 100%);
+                border: 2px solid #f39c12;
+                border-radius: 16px;
+                padding: 24px;
+                margin-bottom: 24px;
+            }
+            .action-header h3 {
+                margin: 0 0 6px 0;
+                color: #e67e22;
+                font-size: 1.2rem;
+            }
+            .action-header p {
+                margin: 0 0 16px 0;
+                color: #b9770e;
+                font-size: 0.85rem;
+            }
+            .one-click-btn {
+                width: 100%;
+                padding: 14px;
+                font-size: 1.1rem;
+                font-weight: bold;
+                color: #fff;
+                background: linear-gradient(135deg, #f39c12, #e67e22);
+                border: none;
+                border-radius: 10px;
+                cursor: pointer;
+                transition: all 0.3s ease;
+                letter-spacing: 2px;
+            }
+            .one-click-btn:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 20px rgba(243, 156, 18, 0.4);
+            }
+            .one-click-btn:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+            }
+            .task-list {
+                margin-top: 16px;
+            }
+            .task-item {
+                display: flex;
+                align-items: center;
+                padding: 10px 14px;
+                margin-bottom: 6px;
+                background: #fff;
+                border-radius: 8px;
+                font-size: 0.9rem;
+                transition: all 0.3s ease;
+            }
+            .task-icon {
+                width: 28px;
+                height: 28px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                margin-right: 12px;
+                font-size: 14px;
+                flex-shrink: 0;
+            }
+            .task-waiting { background: #f0f0f0; color: #999; }
+            .task-running { background: #fff3cd; color: #f39c12; animation: pulse 1.5s infinite; }
+            .task-done { background: #d4edda; color: #27ae60; }
+            .task-error { background: #f8d7da; color: #e74c3c; }
+            .task-name { flex: 1; }
+            .task-msg { font-size: 0.8rem; color: #888; }
         </style>
     </head>
     <body>
@@ -381,7 +470,19 @@ async def navigation_home():
                 <div class="logo">天蝎座</div>
                 <div class="subtitle">量化投资系统 · 数据管理中心</div>
             </div>
-            
+
+            <!-- 一键更新面板 -->
+            <div class="action-panel">
+                <div class="action-header">
+                    <h3>每日一键更新</h3>
+                    <p>依次执行：基础信息 → 名称变更(30天) → 行情 → 复权因子 → 因子 → 估值因子(昨日)</p>
+                </div>
+                <button class="one-click-btn" id="oneClickBtn" onclick="startOneClickUpdate()">
+                    开始一键更新
+                </button>
+                <div class="task-list" id="taskList"></div>
+            </div>
+
             <div class="nav-grid">
                 <a href="/factor/" class="nav-item">
                     <div class="nav-title">
@@ -436,6 +537,16 @@ async def navigation_home():
                         清洗股票日线行情数据（开高低收、成交量、成交额等）
                     </div>
                 </a>
+
+                <a href="/adj-factor-clean" class="nav-item">
+                    <div class="nav-title">
+                        复权因子数据清洗
+                    </div>
+                    <div class="nav-desc">
+                        清洗复权因子数据，用于精确计算前/后复权价格（前复权 = 不复权价 × adj_factor / 最新adj_factor）
+                    </div>
+                </a>
+
                 
                 <a href="/factor-data-clean" class="nav-item">
                     <div class="nav-title">
@@ -575,6 +686,126 @@ async def navigation_home():
                 setInterval(updateSystemStatus, 30000);
             });
             
+            // 一键更新逻辑
+            const TASKS = [
+                {
+                    name: '股票基础信息清洗',
+                    trigger: () => fetch('/datahub/api/v1/stock_info_clean'),
+                    progressUrl: '/datahub/api/v1/get_progress_stock_info'
+                },
+                {
+                    name: '股票名称清洗(近30天)',
+                    trigger: () => {
+                        const today = new Date();
+                        const d30 = new Date(today); d30.setDate(today.getDate() - 30);
+                        const fmt = d => d.toISOString().split('T')[0].replace(/-/g, '');
+                        return fetch(`/datahub/api/v1/upsert_namechange_data?start_date=${fmt(d30)}&end_date=${fmt(today)}&force_update=false`);
+                    },
+                    progressUrl: '/datahub/api/v1/get_progress_namechange'
+                },
+                {
+                    name: '股票行情清洗(昨日)',
+                    trigger: () => {
+                        const d = new Date(); d.setDate(d.getDate() - 1);
+                        const y = d.toISOString().split('T')[0].replace(/-/g, '');
+                        return fetch(`/datahub/api/v1/upsert_stockmarket_final?start_date=${y}&end_date=${y}&force_update=false`);
+                    },
+                    progressUrl: '/datahub/api/v1/get_progress_stockmarket_final'
+                },
+                {
+                    name: '复权因子清洗(昨日)',
+                    trigger: () => {
+                        const d = new Date(); d.setDate(d.getDate() - 1);
+                        const y = d.toISOString().split('T')[0].replace(/-/g, '');
+                        return fetch(`/datahub/api/v1/upsert_adj_factor_final?start_date=${y}&end_date=${y}&force_update=false`);
+                    },
+                    progressUrl: '/datahub/api/v1/get_progress_adj_factor_final'
+                },
+                {
+                    name: '因子数据清洗(昨日)',
+                    trigger: () => {
+                        const d = new Date(); d.setDate(d.getDate() - 1);
+                        const y = d.toISOString().split('T')[0].replace(/-/g, '');
+                        return fetch(`/datahub/api/v1/upsert_factor_final?start_date=${y}&end_date=${y}`);
+                    },
+                    progressUrl: '/datahub/api/v1/get_progress_factor_final'
+                },
+                {
+                    name: '估值因子清洗(昨日)',
+                    trigger: () => {
+                        const d = new Date(); d.setDate(d.getDate() - 1);
+                        const y = d.toISOString().split('T')[0];
+                        return fetch(`/datahub/api/v1/upsert_valuation_factor?start_date=${y}&end_date=${y}`);
+                    },
+                    progressUrl: '/datahub/api/v1/get_progress_valuation_factor'
+                }
+            ];
+
+            function renderTasks() {
+                const list = document.getElementById('taskList');
+                list.innerHTML = TASKS.map((t, i) =>
+                    `<div class="task-item" id="task-${i}">
+                        <div class="task-icon task-waiting" id="icon-${i}">-</div>
+                        <span class="task-name">${t.name}</span>
+                        <span class="task-msg" id="msg-${i}"></span>
+                    </div>`
+                ).join('');
+            }
+
+            function setTaskState(i, state, msg) {
+                const icon = document.getElementById('icon-' + i);
+                const msgEl = document.getElementById('msg-' + i);
+                if (icon) {
+                    icon.className = 'task-icon task-' + state;
+                    icon.textContent = { waiting: '-', running: '⏳', done: '✓', error: '✗' }[state] || '-';
+                }
+                if (msgEl) msgEl.textContent = msg || '';
+            }
+
+            async function waitForTask(triggerFn, progressUrl, taskIdx) {
+                const resp = await triggerFn();
+                if (!resp.ok) throw new Error('启动失败: HTTP ' + resp.status);
+
+                const maxWait = 30 * 60 * 1000; // 30 min timeout
+                const start = Date.now();
+                while (Date.now() - start < maxWait) {
+                    await new Promise(r => setTimeout(r, 2000));
+                    try {
+                        const pr = await fetch(progressUrl);
+                        const data = await pr.json();
+                        if (data.status === 'completed') return;
+                        if (data.status === 'error') throw new Error(data.error_message || '任务执行失败');
+                        setTaskState(taskIdx, 'running', data.current_task || data.progress_percent + '%');
+                    } catch (e) {
+                        if (e.message && e.message.includes('任务')) throw e;
+                    }
+                }
+                throw new Error('任务超时(30分钟)');
+            }
+
+            async function startOneClickUpdate() {
+                const btn = document.getElementById('oneClickBtn');
+                btn.disabled = true;
+                btn.textContent = '更新中...';
+                renderTasks();
+
+                for (let i = 0; i < TASKS.length; i++) {
+                    setTaskState(i, 'running', '启动中...');
+                    try {
+                        await waitForTask(TASKS[i].trigger, TASKS[i].progressUrl, i);
+                        setTaskState(i, 'done', '完成');
+                    } catch (e) {
+                        setTaskState(i, 'error', e.message);
+                        btn.disabled = false;
+                        btn.textContent = '开始一键更新';
+                        return;
+                    }
+                }
+
+                btn.disabled = false;
+                btn.textContent = '开始一键更新';
+            }
+
             // 添加手动刷新状态的功能
             document.querySelector('.status-title').addEventListener('click', function() {
                 updateSystemStatus();

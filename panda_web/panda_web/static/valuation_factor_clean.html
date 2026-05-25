@@ -500,7 +500,7 @@
                 </button>
                 <button class="btn btn-success" onclick="updateRecent()">
                     <span>⚡</span>
-                    <span>更新最近7天</span>
+                    <span>更新昨日数据</span>
                 </button>
                 <button class="btn btn-info" onclick="queryResults()">
                     <span>📊</span>
@@ -662,18 +662,18 @@
             }
         }
 
-        // 更新最近7天
+        // 更新昨日数据
         async function updateRecent() {
-            if (!confirm('确认更新最近7天的估值因子数据？')) {
+            if (!confirm('确认更新昨日的估值因子数据？')) {
                 return;
             }
 
             const today = new Date();
-            const sevenDaysAgo = new Date(today);
-            sevenDaysAgo.setDate(today.getDate() - 7);
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
 
-            const startDate = sevenDaysAgo.toISOString().split('T')[0];
-            const endDate = today.toISOString().split('T')[0];
+            const startDate = yesterday.toISOString().split('T')[0];
+            const endDate = yesterday.toISOString().split('T')[0];
 
             showProgress();
 

@@ -34,10 +34,11 @@ class TSFactorCleaner(ABC):
             data['ts_code'] = data['symbol'].apply(get_tushare_suffix)
 
             logger.info("正在获取市值和换手率数据数据......")
-            factor_data = self.pro.query('daily_basic', trade_date=date,fields=['ts_code','turnover_rate','total_mv'])
-            temp_data = data.merge(factor_data[['ts_code','turnover_rate','total_mv']], on='ts_code', how='left')
+            factor_data = self.pro.query('daily_basic', trade_date=date,fields=['ts_code','turnover_rate','turnover_rate_f','total_mv'])
+            temp_data = data.merge(factor_data[['ts_code','turnover_rate','turnover_rate_f','total_mv']], on='ts_code', how='left')
             temp_data = temp_data.rename(columns={'total_mv': 'market_cap'})
             temp_data = temp_data.rename(columns={'turnover_rate': 'turnover'})
+            temp_data = temp_data.rename(columns={'turnover_rate_f': 'turnover_f'})
             logger.info("正在获取成交额数据......")
             price_data = self.pro.query("daily", trade_date=date, fields=['ts_code', 'amount'])
             result_data = temp_data.merge(price_data[['ts_code', 'amount']], on='ts_code', how='left')
@@ -45,7 +46,7 @@ class TSFactorCleaner(ABC):
             # tushare的成交额是以千元为单位的
             result_data['amount'] = result_data['amount'] * 1000
             result_data['market_cap'] = result_data['market_cap'] * 10000
-            desired_order = ['date', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'market_cap', 'turnover','amount']
+            desired_order = ['date', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'market_cap', 'turnover', 'turnover_f', 'amount']
             result_data = result_data[desired_order]
             ensure_collection_and_indexes(table_name='factor_base')
             upsert_operations = []

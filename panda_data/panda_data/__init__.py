@@ -11,7 +11,8 @@ _config = None
 _factor = None
 _market_data = None
 _market_min_data = None
-_financial_data_reader = None # 新增
+_financial_data_reader = None
+_adj_factor_data = None
 
 # 明确导出的公共接口
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     'get_stock_instruments',
     'get_market_min_data',
     'get_market_data',
+    'get_adj_factor',
     'get_available_market_fields',
     'get_st_stocks_by_date',
     'get_stocks_by_listing_days',
@@ -44,15 +46,16 @@ def init(configPath: Optional[str] = None) -> None:
     Args:
         config_path: Path to the config file. If None, will use default config from panda_common.config
     """
-    global _config, _factor, _market_data, _market_min_data,_financial_data_reader
+    global _config, _factor, _market_data, _market_min_data, _financial_data_reader, _adj_factor_data
 
     try:
         # 延迟导入，避免在模块加载时就导入
         from .factor.factor_reader import FactorReader
         from .market_data.market_data_reader import MarketDataReader
+        from .market_data.adj_factor_data_reader import AdjFactorDataReader
         from .market_data.market_stock_cn_minute_reader import MarketStockCnMinReaderV3
-        from .financial.financial_data_reader import FinancialDataReader # 新增
-        
+        from .financial.financial_data_reader import FinancialDataReader
+
         # 使用panda_common中的配置
         _config = get_config()
 
@@ -61,8 +64,9 @@ def init(configPath: Optional[str] = None) -> None:
 
         _factor = FactorReader(_config)
         _market_data = MarketDataReader(_config)
+        _adj_factor_data = AdjFactorDataReader(_config)
         _market_min_data = MarketStockCnMinReaderV3(_config)
-        _financial_data_reader = FinancialDataReader(_config) # 新增
+        _financial_data_reader = FinancialDataReader(_config)
     except Exception as e:
         raise RuntimeError(f"Failed to initialize panda_data: {str(e)}")
 
@@ -167,6 +171,33 @@ def get_market_min_data(
         fields=fields
     )
 
+def get_adj_factor(
+        symbols: Optional[Union[str, List[str]]] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+) -> Optional[pd.DataFrame]:
+    """
+    Get adj_factor data for given symbols and date range.
+    Adj factor can be used to compute forward/backward adjusted prices:
+      前复权价格 = 不复权价格 * adj_factor / latest_adj_factor
+      后复权价格 = 不复权价格 * adj_factor
+
+    Args:
+        symbols: Optional list of symbols or single symbol. If None, returns all symbols.
+        start_date: Start date in YYYYMMDD format.
+        end_date: End date in YYYYMMDD format.
+
+    Returns:
+        pandas DataFrame with columns: date, symbol, adj_factor
+    """
+    if _adj_factor_data is None:
+        raise RuntimeError("Please call init() before using any functions")
+
+    return _adj_factor_data.get_adj_factor(
+        symbols=symbols,
+        start_date=start_date,
+        end_date=end_date,
+    )
 
 def get_market_data(
         start_date: str,

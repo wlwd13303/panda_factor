@@ -99,7 +99,21 @@ def factor_analysis(df_factor: pd.DataFrame, params: Params, factor_id: str = ""
             logger.debug(msg="Cleaning K-line data")
             if df_k_data is not None:
                 df_k_data_cleaned = clean_k_data(df_k_data)
-                logger.debug(msg="Calculating post-adjustment and future returns")
+                logger.debug(msg="Fetching adj_factor data for precise adjusted price calculation")
+                adj_factor_df = panda_data.get_adj_factor(
+                    start_date=params.start_date.replace("-", ""),
+                    end_date=params.end_date.replace("-", "")
+                )
+                if adj_factor_df is not None and not adj_factor_df.empty:
+                    # adj_factor symbol 格式为 ts_code (如 600519.SH)，market 为纯代码 (如 600519)，
+                    # 统一为 market 格式再合并
+                    adj_factor_df['symbol'] = adj_factor_df['symbol'].str.replace(r'\.(SH|SZ|BJ)$', '', regex=True)
+                    df_k_data_cleaned = df_k_data_cleaned.merge(
+                        adj_factor_df[['date', 'symbol', 'adj_factor']],
+                        on=['date', 'symbol'], how='left'
+                    )
+                    df_k_data_cleaned['adj_factor'] = df_k_data_cleaned.groupby('symbol')['adj_factor'].ffill()
+                logger.debug(msg="Calculating adjusted prices and future returns")
                 df_k_data = df_k_data_cleaned.groupby('symbol', group_keys=False).apply(cal_hfq)
 
         except Exception as e:

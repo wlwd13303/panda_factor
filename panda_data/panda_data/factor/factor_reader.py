@@ -7,7 +7,6 @@ import traceback
 
 from panda_common.handlers.database_handler import DatabaseHandler
 from panda_common.logger_config import logger
-from panda_data_hub.models.requestEntity import FactorsRequest
 from panda_common.fields.financial_fields import ALL_FINANCIAL_FIELDS
 
 class FactorReader:
@@ -91,7 +90,7 @@ class FactorReader:
         # 基础因子列表（来自 factor_base 表）
         base_factors = [
             "open", "close", "high", "low",
-            "volume", "market_cap", "turnover", "amount",
+            "volume", "market_cap", "turnover", "turnover_f", "amount",
             "pb", "pe_ttm", "ps_ttm", "dv_ttm", "circ_mv",
         ]
         

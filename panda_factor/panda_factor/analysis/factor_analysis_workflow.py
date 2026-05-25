@@ -11,39 +11,80 @@ import time
 from typing import Sequence, Union
 
 
-def cal_hfq_vectorized(
+def cal_fq_from_adj_factor(
         df: pd.DataFrame,
-        adjustment_cycles: Union[int, Sequence[int]]
+        adj_factor_df: pd.DataFrame,
+        adjustment_cycles: Union[int, Sequence[int]],
+        fq_type: str = 'qfq'
 ) -> pd.DataFrame:
+    """
+    使用 Tushare 复权因子计算前/后复权价格和未来收益。
+    前复权(qfq): fq_price = raw_price * adj_factor / latest_adj_factor
+    后复权(hfq): fq_price = raw_price * adj_factor
+
+    Args:
+        df: 原始行情数据，需包含 date, symbol, open 列
+        adj_factor_df: 复权因子数据，需包含 date, symbol, adj_factor 列
+        adjustment_cycles: 未来收益计算周期（如 1, 5, 10, 20）
+        fq_type: 复权类型 'qfq'（前复权，默认）或 'hfq'（后复权）
+    """
     if isinstance(adjustment_cycles, int):
         cycles = (adjustment_cycles,)
     else:
         cycles = tuple(sorted(set(adjustment_cycles)))
 
-    # 1️⃣ 先整体按 symbol+date 排序，一次性完成
     df = df.sort_values(['symbol', 'date']).reset_index(drop=True)
 
-    # 2️⃣ 日收益 & 复权因子
+    # 合并复权因子（adj_factor symbol 为 ts_code 格式，统一为纯代码再合并）
+    adj_factor_df['symbol'] = adj_factor_df['symbol'].str.replace(r'\.(SH|SZ|BJ)$', '', regex=True)
+    df = df.merge(adj_factor_df[['date', 'symbol', 'adj_factor']], on=['date', 'symbol'], how='left')
+    df['adj_factor'] = df.groupby('symbol')['adj_factor'].ffill()
+    df = df.dropna(subset=['adj_factor'])
+
+    # 计算复权开盘价
+    if fq_type == 'qfq':
+        latest_adj = df.groupby('symbol')['adj_factor'].transform('last')
+        df['fq_open'] = df['open'] * df['adj_factor'] / latest_adj
+    else:
+        df['fq_open'] = df['open'] * df['adj_factor']
+
+    # 未来收益计算
+    fq_grp = df.groupby('symbol')['fq_open']
+    df['1day_return'] = fq_grp.shift(-2) / fq_grp.shift(-1) - 1.0
+
+    for n in cycles:
+        df[f'{n}day_return'] = fq_grp.shift(-(n + 1)) / fq_grp.shift(-1) - 1.0
+
+    df.drop(columns=['pre_close', 'adj_factor', 'fq_open'], inplace=True, errors='ignore')
+    return df
+
+
+def cal_hfq_legacy(
+        df: pd.DataFrame,
+        adjustment_cycles: Union[int, Sequence[int]]
+) -> pd.DataFrame:
+    """使用 close/pre_close 累积乘积近似计算后复权价格（已废弃，建议使用 cal_fq_from_adj_factor）"""
+    if isinstance(adjustment_cycles, int):
+        cycles = (adjustment_cycles,)
+    else:
+        cycles = tuple(sorted(set(adjustment_cycles)))
+
+    df = df.sort_values(['symbol', 'date']).reset_index(drop=True)
     df['pct'] = df['close'] / df['pre_close'] - 1.0
     df['div_factor'] = (1.0 + df['pct']).groupby(df['symbol']).cumprod()
-    # 确保每个分组第一行为 1
     first_idx = df.groupby('symbol').head(1).index
     df.loc[first_idx, 'div_factor'] = 1.0
 
-    # 3️⃣ 向后复权开盘价
     first_open = df.groupby('symbol')['open'].transform('first')
     first_div = df.groupby('symbol')['div_factor'].transform('first')
     df['hfq_open'] = first_open * df['div_factor'] / first_div
 
-    # 4️⃣ 未来 1 日收益
     hfq_grp = df.groupby('symbol')['hfq_open']
     df['1day_return'] = hfq_grp.shift(-2) / hfq_grp.shift(-1) - 1.0
 
-    # 5️⃣ 指定周期未来收益（一次循环，仍是向量化 shift）
     for n in cycles:
         df[f'{n}day_return'] = hfq_grp.shift(-(n + 1)) / hfq_grp.shift(-1) - 1.0
 
-    # 6️⃣ 清理临时列
     df.drop(columns=['pct', 'pre_close', 'div_factor'], inplace=True)
     return df
 
@@ -210,8 +251,20 @@ def factor_analysis_workflow(df_factor: pd.DataFrame, adjustment_cycle, group_nu
             logger.info(msg="Cleaning K-line data")
             if df_k_data is not None:
                 df_k_data_cleaned = clean_k_data(df_k_data)
-                logger.info(msg="Calculating post-adjustment and future returns")
-                df_k_data = cal_hfq_vectorized(df_k_data_cleaned, adjustment_cycles=adjustment_cycle)
+                logger.info(msg="Fetching adj_factor data for precise adjusted price calculation")
+                adj_factor_df = panda_data.get_adj_factor(
+                    start_date=start_time,
+                    end_date=end_time
+                )
+                if adj_factor_df is not None and not adj_factor_df.empty:
+                    logger.info(msg=f"adj_factor data fetched: {len(adj_factor_df)} rows, computing forward-adjusted prices")
+                    df_k_data = cal_fq_from_adj_factor(
+                        df_k_data_cleaned, adj_factor_df,
+                        adjustment_cycles=adjustment_cycle, fq_type='qfq'
+                    )
+                else:
+                    logger.warning(msg="No adj_factor data available, falling back to close/pre_close method")
+                    df_k_data = cal_hfq_legacy(df_k_data_cleaned, adjustment_cycles=adjustment_cycle)
         except Exception as e:
             error_msg = f"Failed to fetch K-line data: {str(e)}"
             logger.error(msg=error_msg)

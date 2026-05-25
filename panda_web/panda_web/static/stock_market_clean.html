@@ -459,7 +459,7 @@
                 </button>
                 <button class="btn btn-success" onclick="updateRecent()">
                     <span>⚡</span>
-                    <span>更新最近7天</span>
+                    <span>更新昨日数据</span>
                 </button>
                 <button class="btn btn-secondary" onclick="resetForm()">
                     <span>🔄</span>
@@ -556,21 +556,21 @@
             }
         }
 
-        // 更新最近7天
+        // 更新昨日数据
         async function updateRecent() {
             const forceUpdate = document.getElementById('forceUpdate').checked;
             const forceText = forceUpdate ? '\n⚠️ 强制更新模式' : '\n✅ 智能模式（跳过已完整的交易日）';
-            
-            if (!confirm(`确认更新最近7天的数据？${forceText}`)) {
+
+            if (!confirm(`确认更新昨日数据？${forceText}`)) {
                 return;
             }
 
             const today = new Date();
-            const sevenDaysAgo = new Date(today);
-            sevenDaysAgo.setDate(today.getDate() - 7);
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
 
-            const startDate = sevenDaysAgo.toISOString().split('T')[0].replace(/-/g, '');
-            const endDate = today.toISOString().split('T')[0].replace(/-/g, '');
+            const startDate = yesterday.toISOString().split('T')[0].replace(/-/g, '');
+            const endDate = yesterday.toISOString().split('T')[0].replace(/-/g, '');
 
             showProgress();
             

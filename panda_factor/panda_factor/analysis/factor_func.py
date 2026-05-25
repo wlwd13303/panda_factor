@@ -33,23 +33,40 @@ import panda_data
 #     return df
 def cal_hfq(df: pd.DataFrame) -> pd.DataFrame:
     """
-    # Calculate backward adjusted prices and future returns for 1/3/5/10/20/30 days
-    :param df: DataFrame to be processed
+    Calculate adjusted prices and future returns for 1/3/5/10/20/30 days.
+    If 'adj_factor' column exists in the DataFrame (pre-merged), uses the precise
+    Tushare adj_factor to compute forward-adjusted prices.
+    Otherwise falls back to close/pre_close cumprod approximation.
+
+    :param df: DataFrame to be processed (single symbol)
     """
     df = df.sort_values(by='date')
-    df['pct'] = df['close'] / df['pre_close'] - 1  # Daily return
-    df['div_factors'] = (1 + df['pct']).cumprod()  # Adjustment factor
-    df.at[df.index[0], 'div_factors'] = 1
-    df['hfq_open'] = df.iloc[0]['open'] * df['div_factors'] / df.iloc[0]['div_factors']  # Backward adjusted open price
-    df['1day_return'] = df['hfq_open'].shift(-2) / df['hfq_open'].shift(-1) - 1  # 1-day return/daily return
-    df['3day_return'] = df['hfq_open'].shift(-4) / df['hfq_open'].shift(-1) - 1  # 3-day return
-    df['5day_return'] = df['hfq_open'].shift(-6) / df['hfq_open'].shift(-1) - 1  # 5-day/weekly return
-    df['10day_return'] = df['hfq_open'].shift(-11) / df['hfq_open'].shift(-1) - 1  # 10-day/biweekly return
-    df['20day_return'] = df['hfq_open'].shift(-21) / df['hfq_open'].shift(-1) - 1  # 20-day/monthly return
-    df['30day_return'] = df['hfq_open'].shift(-31) / df['hfq_open'].shift(-1) - 1  # 30-day return
-    df.pop('pct')
-    df.pop('pre_close')
-    df.pop('div_factors')
+
+    if 'adj_factor' in df.columns and df['adj_factor'].notna().any():
+        # 使用 Tushare 复权因子计算前复权价格
+        latest_adj = df['adj_factor'].iloc[-1]
+        if latest_adj and latest_adj > 0:
+            df['fq_open'] = df['open'] * df['adj_factor'] / latest_adj
+        else:
+            df['fq_open'] = df['open']
+        df.drop(columns=['adj_factor'], inplace=True)
+    else:
+        # 回退到 close/pre_close 累积乘积近似计算
+        df['pct'] = df['close'] / df['pre_close'] - 1
+        df['div_factors'] = (1 + df['pct']).cumprod()
+        df.at[df.index[0], 'div_factors'] = 1
+        df['fq_open'] = df.iloc[0]['open'] * df['div_factors'] / df.iloc[0]['div_factors']
+        df.pop('pct')
+        df.pop('div_factors')
+
+    df['1day_return'] = df['fq_open'].shift(-2) / df['fq_open'].shift(-1) - 1
+    df['3day_return'] = df['fq_open'].shift(-4) / df['fq_open'].shift(-1) - 1
+    df['5day_return'] = df['fq_open'].shift(-6) / df['fq_open'].shift(-1) - 1
+    df['10day_return'] = df['fq_open'].shift(-11) / df['fq_open'].shift(-1) - 1
+    df['20day_return'] = df['fq_open'].shift(-21) / df['fq_open'].shift(-1) - 1
+    df['30day_return'] = df['fq_open'].shift(-31) / df['fq_open'].shift(-1) - 1
+    df.pop('pre_close', None)
+    df.pop('fq_open', None)
     return df
 
 
