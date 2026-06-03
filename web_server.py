@@ -432,6 +432,25 @@ async def navigation_home():
                 background: #ccc;
                 cursor: not-allowed;
             }
+            .btn-row {
+                display: flex;
+                gap: 12px;
+            }
+            .one-click-btn.small {
+                flex: 1;
+                padding: 12px 8px;
+                font-size: 0.95rem;
+                letter-spacing: 1px;
+            }
+            .one-click-btn.daily {
+                background: linear-gradient(135deg, #f39c12, #e67e22);
+            }
+            .one-click-btn.weekly {
+                background: linear-gradient(135deg, #3498db, #2980b9);
+            }
+            .one-click-btn.monthly {
+                background: linear-gradient(135deg, #9b59b6, #8e44ad);
+            }
             .task-list {
                 margin-top: 16px;
             }
@@ -474,12 +493,20 @@ async def navigation_home():
             <!-- 一键更新面板 -->
             <div class="action-panel">
                 <div class="action-header">
-                    <h3>每日一键更新</h3>
-                    <p>依次执行：基础信息 → 名称变更(30天) → 行情 → 复权因子 → 因子 → 估值因子(昨日)</p>
+                    <h3>一键更新</h3>
+                    <p>依次执行：基础信息 → 名称变更 → 行情 → 复权因子 → 因子 → 估值因子</p>
                 </div>
-                <button class="one-click-btn" id="oneClickBtn" onclick="startOneClickUpdate()">
-                    开始一键更新
-                </button>
+                <div class="btn-row">
+                    <button class="one-click-btn small daily" id="dailyBtn" onclick="startUpdate(1, '昨日')">
+                        每日更新
+                    </button>
+                    <button class="one-click-btn small weekly" id="weeklyBtn" onclick="startUpdate(7, '近7天')">
+                        最近1周
+                    </button>
+                    <button class="one-click-btn small monthly" id="monthlyBtn" onclick="startUpdate(30, '近30天')">
+                        最近1个月
+                    </button>
+                </div>
                 <div class="task-list" id="taskList"></div>
             </div>
 
@@ -687,61 +714,50 @@ async def navigation_home():
             });
             
             // 一键更新逻辑
-            const TASKS = [
-                {
-                    name: '股票基础信息清洗',
-                    trigger: () => fetch('/datahub/api/v1/stock_info_clean'),
-                    progressUrl: '/datahub/api/v1/get_progress_stock_info'
-                },
-                {
-                    name: '股票名称清洗(近30天)',
-                    trigger: () => {
-                        const today = new Date();
-                        const d30 = new Date(today); d30.setDate(today.getDate() - 30);
-                        const fmt = d => d.toISOString().split('T')[0].replace(/-/g, '');
-                        return fetch(`/datahub/api/v1/upsert_namechange_data?start_date=${fmt(d30)}&end_date=${fmt(today)}&force_update=false`);
-                    },
-                    progressUrl: '/datahub/api/v1/get_progress_namechange'
-                },
-                {
-                    name: '股票行情清洗(昨日)',
-                    trigger: () => {
-                        const d = new Date(); d.setDate(d.getDate() - 1);
-                        const y = d.toISOString().split('T')[0].replace(/-/g, '');
-                        return fetch(`/datahub/api/v1/upsert_stockmarket_final?start_date=${y}&end_date=${y}&force_update=false`);
-                    },
-                    progressUrl: '/datahub/api/v1/get_progress_stockmarket_final'
-                },
-                {
-                    name: '复权因子清洗(昨日)',
-                    trigger: () => {
-                        const d = new Date(); d.setDate(d.getDate() - 1);
-                        const y = d.toISOString().split('T')[0].replace(/-/g, '');
-                        return fetch(`/datahub/api/v1/upsert_adj_factor_final?start_date=${y}&end_date=${y}&force_update=false`);
-                    },
-                    progressUrl: '/datahub/api/v1/get_progress_adj_factor_final'
-                },
-                {
-                    name: '因子数据清洗(昨日)',
-                    trigger: () => {
-                        const d = new Date(); d.setDate(d.getDate() - 1);
-                        const y = d.toISOString().split('T')[0].replace(/-/g, '');
-                        return fetch(`/datahub/api/v1/upsert_factor_final?start_date=${y}&end_date=${y}`);
-                    },
-                    progressUrl: '/datahub/api/v1/get_progress_factor_final'
-                },
-                {
-                    name: '估值因子清洗(昨日)',
-                    trigger: () => {
-                        const d = new Date(); d.setDate(d.getDate() - 1);
-                        const y = d.toISOString().split('T')[0];
-                        return fetch(`/datahub/api/v1/upsert_valuation_factor?start_date=${y}&end_date=${y}`);
-                    },
-                    progressUrl: '/datahub/api/v1/get_progress_valuation_factor'
-                }
-            ];
+            function buildTasks(daysBack, label) {
+                const today = new Date();
+                const fmt = d => d.toISOString().split('T')[0].replace(/-/g, '');
+                const start = new Date(today); start.setDate(today.getDate() - daysBack);
+                const end = new Date(today); end.setDate(today.getDate() - 1);
 
-            function renderTasks() {
+                return [
+                    {
+                        name: '股票基础信息清洗',
+                        trigger: () => fetch('/datahub/api/v1/stock_info_clean'),
+                        progressUrl: '/datahub/api/v1/get_progress_stock_info'
+                    },
+                    {
+                        name: '股票名称清洗(近30天)',
+                        trigger: () => {
+                            const ns = new Date(today); ns.setDate(today.getDate() - 30);
+                            return fetch(`/datahub/api/v1/upsert_namechange_data?start_date=${fmt(ns)}&end_date=${fmt(today)}&force_update=false`);
+                        },
+                        progressUrl: '/datahub/api/v1/get_progress_namechange'
+                    },
+                    {
+                        name: `股票行情清洗(${label})`,
+                        trigger: () => fetch(`/datahub/api/v1/upsert_stockmarket_final?start_date=${fmt(start)}&end_date=${fmt(end)}&force_update=false`),
+                        progressUrl: '/datahub/api/v1/get_progress_stock_final'
+                    },
+                    {
+                        name: `复权因子清洗(${label})`,
+                        trigger: () => fetch(`/datahub/api/v1/upsert_adj_factor_final?start_date=${fmt(start)}&end_date=${fmt(end)}&force_update=false`),
+                        progressUrl: '/datahub/api/v1/get_progress_adj_factor_final'
+                    },
+                    {
+                        name: `因子数据清洗(${label})`,
+                        trigger: () => fetch(`/datahub/api/v1/upsert_factor_final?start_date=${fmt(start)}&end_date=${fmt(end)}`),
+                        progressUrl: '/datahub/api/v1/get_progress_factor_final'
+                    },
+                    {
+                        name: `估值因子清洗(${label})`,
+                        trigger: () => fetch(`/datahub/api/v1/upsert_valuation_factor?start_date=${fmt(start)}&end_date=${fmt(end)}`),
+                        progressUrl: '/datahub/api/v1/get_progress_valuation_factor'
+                    }
+                ];
+            }
+
+            function renderTasks(TASKS) {
                 const list = document.getElementById('taskList');
                 list.innerHTML = TASKS.map((t, i) =>
                     `<div class="task-item" id="task-${i}">
@@ -766,7 +782,7 @@ async def navigation_home():
                 const resp = await triggerFn();
                 if (!resp.ok) throw new Error('启动失败: HTTP ' + resp.status);
 
-                const maxWait = 30 * 60 * 1000; // 30 min timeout
+                const maxWait = 30 * 60 * 1000;
                 const start = Date.now();
                 while (Date.now() - start < maxWait) {
                     await new Promise(r => setTimeout(r, 2000));
@@ -777,17 +793,18 @@ async def navigation_home():
                         if (data.status === 'error') throw new Error(data.error_message || '任务执行失败');
                         setTaskState(taskIdx, 'running', data.current_task || data.progress_percent + '%');
                     } catch (e) {
-                        if (e.message && e.message.includes('任务')) throw e;
+                        throw new Error('进度查询失败: ' + (e.message || e));
                     }
                 }
                 throw new Error('任务超时(30分钟)');
             }
 
-            async function startOneClickUpdate() {
-                const btn = document.getElementById('oneClickBtn');
-                btn.disabled = true;
-                btn.textContent = '更新中...';
-                renderTasks();
+            async function startUpdate(daysBack, label) {
+                const btns = document.querySelectorAll('.one-click-btn');
+                btns.forEach(b => b.disabled = true);
+
+                const TASKS = buildTasks(daysBack, label);
+                renderTasks(TASKS);
 
                 for (let i = 0; i < TASKS.length; i++) {
                     setTaskState(i, 'running', '启动中...');
@@ -796,14 +813,12 @@ async def navigation_home():
                         setTaskState(i, 'done', '完成');
                     } catch (e) {
                         setTaskState(i, 'error', e.message);
-                        btn.disabled = false;
-                        btn.textContent = '开始一键更新';
+                        btns.forEach(b => b.disabled = false);
                         return;
                     }
                 }
 
-                btn.disabled = false;
-                btn.textContent = '开始一键更新';
+                btns.forEach(b => b.disabled = false);
             }
 
             // 添加手动刷新状态的功能

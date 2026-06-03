@@ -72,14 +72,39 @@ def check_port(port):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         return s.connect_ex(('localhost', port)) == 0
 
+def kill_port_process(port):
+    """终止占用指定端口的进程（Windows）"""
+    import subprocess
+    try:
+        result = subprocess.run(
+            f'netstat -ano | findstr :{port}',
+            shell=True, capture_output=True, text=True, timeout=5
+        )
+        killed = False
+        for line in result.stdout.strip().split('\n'):
+            parts = line.strip().split()
+            if len(parts) >= 5 and parts[1].endswith(f':{port}'):
+                pid = parts[-1]
+                if pid != '0':
+                    subprocess.run(f'taskkill /F /PID {pid}', shell=True, capture_output=True)
+                    killed = True
+        return killed
+    except Exception:
+        return False
+
 def start_service(name, command, cwd=None, wait_time=2, check_port_num=None):
     """启动一个服务"""
     print_info(f"启动 {name}...")
     
     # 检查端口
     if check_port_num and check_port(check_port_num):
-        print_warning(f"端口 {check_port_num} 已被占用，跳过 {name}")
-        return None
+        print_warning(f"端口 {check_port_num} 已被占用，尝试终止旧进程...")
+        if kill_port_process(check_port_num):
+            print_success(f"端口 {check_port_num} 已释放")
+            time.sleep(1)
+        else:
+            print_warning(f"无法释放端口 {check_port_num}，跳过 {name}")
+            return None
     
     try:
         # Windows使用不同的命令
@@ -121,11 +146,14 @@ def main():
     root_dir = Path(__file__).parent.resolve()
     print_info(f"项目根目录: {root_dir}")
     
+    # 使用当前 Python 解释器（自动适配 venv）
+    python_exe = sys.executable
+
     # 服务配置
     services = [
         {
             "name": "Web服务 (前端 + 数据API)",
-            "command": "python web_server.py",
+            "command": f'"{python_exe}" web_server.py',
             "cwd": str(root_dir),
             "port": 19080,
             "wait_time": 3,
@@ -133,7 +161,7 @@ def main():
         },
         {
             "name": "数据自动更新任务",
-            "command": "python -m panda_data_hub._main_auto_",
+            "command": f'"{python_exe}" -m panda_data_hub._main_auto_',
             "cwd": str(root_dir),
             "port": None,
             "wait_time": 2,

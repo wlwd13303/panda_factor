@@ -436,6 +436,21 @@ class MarketDataReader:
             logger.error(f"在 {date} 过滤涨跌停股票时出错: {str(e)}")
             return None
 
+    def get_available_fields(self) -> List[str]:
+        """Get all available field names in the stock_market collection"""
+        try:
+            collection = self.db_handler.get_mongo_collection(
+                self.config["MONGO_DB"],
+                "stock_market"
+            )
+            doc = collection.find_one({}, {"_id": 0})
+            if doc is None:
+                return []
+            return list(doc.keys())
+        except Exception as e:
+            logger.error(f"Failed to get available fields: {str(e)}")
+            return []
+
     def get_all_symbols(self):
         """Get all unique symbols using distinct command"""
         collection = self.db_handler.get_mongo_collection(
